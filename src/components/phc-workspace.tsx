@@ -1,7 +1,6 @@
 "use client";
 
 import type { Route } from "next";
-import { HeartPulse, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
 import { ChatWorkflow } from "./chat-workflow";
@@ -21,7 +20,7 @@ export function PhcWorkspace({ activeRoute }: { activeRoute: WorkflowRoute }) {
   }, [activeRoute]);
 
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <div className="flex h-screen flex-col bg-paper text-ink">
       <Header activeRoute={activeRoute} />
       <main className="flex-1 overflow-hidden">
         {workflow.task === "chat" ? (
@@ -36,23 +35,24 @@ export function PhcWorkspace({ activeRoute }: { activeRoute: WorkflowRoute }) {
 
 function Header({ activeRoute }: { activeRoute: WorkflowRoute }) {
   return (
-    <header className="sticky top-0 z-40 flex h-[var(--header-height)] flex-shrink-0 items-center gap-6 border-b border-border/70 bg-background/85 px-4 backdrop-blur-md md:px-6">
+    <header className="sticky top-0 z-40 flex h-[var(--header-height)] flex-shrink-0 items-stretch border-b border-ink bg-paper">
       <Link
-        href={"/chat" as Route}
-        className="flex items-center gap-2 font-semibold tracking-tight text-foreground"
+        href={"/" as Route}
+        className="flex items-center gap-3 border-r border-ink px-5 hover:bg-ink hover:text-paper transition-colors"
       >
-        <span className="flex size-8 items-center justify-center rounded-md bg-primary/10 text-primary">
-          <HeartPulse className="size-4" />
+        <span className="font-sans text-base font-bold tracking-tight">
+          PHC<span className="text-accent">—</span>AI
         </span>
-        <span className="text-sm">PHC-AI</span>
+        <span className="hidden font-mono text-[10px] uppercase tracking-[0.18em] opacity-60 md:inline">
+          v0.1
+        </span>
       </Link>
 
       <nav
         aria-label="Workflows"
-        className="-mx-1 flex flex-1 items-center gap-0.5 overflow-x-auto"
+        className="flex flex-1 items-stretch overflow-x-auto"
       >
         {workflows.map((w) => {
-          const Icon = w.icon;
           const active = w.route === activeRoute;
           return (
             <Link
@@ -61,22 +61,36 @@ function Header({ activeRoute }: { activeRoute: WorkflowRoute }) {
               prefetch
               aria-current={active ? "page" : undefined}
               className={cn(
-                "inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                "group relative flex items-center gap-2 whitespace-nowrap border-r border-ink px-4 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors",
                 active
-                  ? "bg-secondary text-secondary-foreground"
-                  : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+                  ? "bg-ink text-paper"
+                  : "text-ink-soft hover:bg-paper-soft hover:text-ink",
               )}
             >
-              <Icon className="size-3.5" />
-              {w.shortLabel}
+              <span
+                className={cn(
+                  "font-mono tabular-nums",
+                  active ? "text-accent" : "text-ink-faint",
+                )}
+              >
+                {w.order}
+              </span>
+              <span className="font-sans text-xs font-semibold uppercase tracking-[0.16em]">
+                {w.shortLabel}
+              </span>
             </Link>
           );
         })}
       </nav>
 
-      <div className="hidden items-center gap-1.5 text-xs text-muted-foreground md:flex">
-        <ShieldAlert className="size-3.5" />
-        Not for diagnosis
+      <div className="ml-auto hidden items-center gap-3 border-l border-ink px-5 md:flex">
+        <span
+          aria-hidden
+          className="block size-1.5 rounded-full bg-accent"
+        />
+        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-soft">
+          Not for diagnosis
+        </span>
       </div>
     </header>
   );

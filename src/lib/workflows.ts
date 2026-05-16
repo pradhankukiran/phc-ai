@@ -18,6 +18,7 @@ export type WorkflowRoute =
   | "pathology";
 
 export type Workflow = {
+  order: string;
   route: WorkflowRoute;
   label: string;
   shortLabel: string;
@@ -32,6 +33,7 @@ export type Workflow = {
 
 export const workflows: Workflow[] = [
   {
+    order: "01",
     route: "chat",
     label: "Visit Notes",
     shortLabel: "Chat",
@@ -49,6 +51,7 @@ export const workflows: Workflow[] = [
     ],
   },
   {
+    order: "02",
     route: "conversation",
     label: "Conversation",
     shortLabel: "Audio",
@@ -65,9 +68,10 @@ export const workflows: Workflow[] = [
     ],
   },
   {
+    order: "03",
     route: "image-match",
     label: "Image Match",
-    shortLabel: "Images",
+    shortLabel: "Image",
     model: "google/medsiglip-448",
     task: "classify",
     icon: Search,
@@ -81,9 +85,10 @@ export const workflows: Workflow[] = [
     ],
   },
   {
+    order: "04",
     route: "chest-xray",
     label: "Chest X-ray",
-    shortLabel: "CXR",
+    shortLabel: "Xray",
     model: "google/cxr-foundation",
     task: "image_embed",
     icon: Bone,
@@ -97,6 +102,7 @@ export const workflows: Workflow[] = [
     ],
   },
   {
+    order: "05",
     route: "skin",
     label: "Skin",
     shortLabel: "Skin",
@@ -113,6 +119,7 @@ export const workflows: Workflow[] = [
     ],
   },
   {
+    order: "06",
     route: "pathology",
     label: "Pathology",
     shortLabel: "Path",

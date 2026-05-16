@@ -1,27 +1,7 @@
 "use client";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import {
-  ClipboardCheck,
-  FileText,
-  Send,
-  ShieldAlert,
-  Stethoscope,
-  Upload,
-  X,
-} from "lucide-react";
+import { Upload, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { infer, type InferResponse } from "@/lib/modalInfer";
 import type { Workflow } from "@/lib/workflows";
@@ -32,6 +12,8 @@ type Inputs = {
   file: File | null;
 };
 
+type Status = "idle" | "running";
+
 export function MediaWorkflow({ workflow }: { workflow: Workflow }) {
   const [inputs, setInputs] = useState<Inputs>({
     prompt: workflow.prompt,
@@ -39,7 +21,7 @@ export function MediaWorkflow({ workflow }: { workflow: Workflow }) {
     file: null,
   });
   const [result, setResult] = useState<InferResponse | null>(null);
-  const [status, setStatus] = useState<"idle" | "running">("idle");
+  const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
 
   const needsImage =
@@ -100,10 +82,17 @@ export function MediaWorkflow({ workflow }: { workflow: Workflow }) {
   }
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-6 md:grid-cols-12 md:px-6">
-        <div className="md:col-span-5">
-          <InputCard
+    <div className="h-full overflow-y-auto bg-paper">
+      <TitleRail workflow={workflow} />
+
+      <div className="mx-auto grid w-full max-w-6xl grid-cols-12 gap-x-10 gap-y-12 px-6 py-10">
+        <section className="col-span-12 lg:col-span-5">
+          <SectionHeader number="01" label="Input" />
+          <p className="mb-6 font-sans text-sm leading-relaxed text-ink-soft">
+            {workflow.help}
+          </p>
+
+          <InputBlock
             workflow={workflow}
             inputs={inputs}
             setInputs={setInputs}
@@ -115,23 +104,61 @@ export function MediaWorkflow({ workflow }: { workflow: Workflow }) {
             needsFile={needsFile}
             showText={showText}
           />
-        </div>
+        </section>
 
-        <div className="space-y-6 md:col-span-7">
-          <OutputCard
-            workflow={workflow}
-            result={result}
-            status={status}
-            error={error}
-          />
-          <QuestionsCard workflow={workflow} />
-        </div>
+        <section className="col-span-12 lg:col-span-7 lg:border-l lg:border-ink lg:pl-10">
+          <div className="space-y-12">
+            <div>
+              <SectionHeader number="02" label="Output" />
+              <OutputBlock status={status} error={error} result={result} />
+            </div>
+
+            <div>
+              <SectionHeader number="03" label="Questions for your clinician" />
+              <QuestionsList questions={workflow.questions} />
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );
 }
 
-function InputCard({
+function TitleRail({ workflow }: { workflow: Workflow }) {
+  return (
+    <div className="border-y-2 border-ink bg-paper">
+      <div className="mx-auto flex w-full max-w-6xl items-center gap-6 px-6 py-5">
+        <span className="font-mono text-2xl tabular-nums text-accent">
+          {workflow.order}
+        </span>
+        <h1 className="flex-1 font-sans text-base font-semibold uppercase tracking-[0.16em] text-ink">
+          {workflow.label}
+        </h1>
+        <span className="hidden font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft md:inline">
+          {workflow.model}
+        </span>
+        <span className="border border-ink px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-ink">
+          {workflow.accepts}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function SectionHeader({ number, label }: { number: string; label: string }) {
+  return (
+    <div className="mb-6">
+      <div className="flex items-baseline gap-2 pb-2 font-mono text-xs uppercase tracking-[0.2em]">
+        <span className="tabular-nums text-accent">{number}</span>
+        <span className="text-ink-soft">/</span>
+        <span className="text-ink">{label}</span>
+      </div>
+      <div className="border-b border-ink" />
+    </div>
+  );
+}
+
+function InputBlock({
   workflow,
   inputs,
   setInputs,
@@ -146,7 +173,7 @@ function InputCard({
   workflow: Workflow;
   inputs: Inputs;
   setInputs: React.Dispatch<React.SetStateAction<Inputs>>;
-  status: "idle" | "running";
+  status: Status;
   canRun: boolean;
   onRun: () => void;
   needsImage: boolean;
@@ -155,105 +182,122 @@ function InputCard({
   showText: boolean;
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">{workflow.label}</CardTitle>
-        <CardDescription>{workflow.help}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {showText && (
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">
-              {workflow.route === "image-match"
-                ? "Candidate labels (one per line)"
-                : "Message"}
-            </label>
-            <Textarea
-              rows={workflow.route === "image-match" ? 4 : 5}
-              value={inputs.prompt}
-              onChange={(event) =>
-                setInputs((current) => ({
-                  ...current,
-                  prompt: event.currentTarget.value,
-                }))
-              }
-              placeholder={
-                workflow.route === "image-match"
-                  ? "normal follow-up\nneeds clinician review\nunclear image quality"
-                  : undefined
-              }
-            />
-          </div>
-        )}
+    <div className="space-y-8">
+      {showText && (
+        <FieldText
+          label={
+            workflow.route === "image-match"
+              ? "Labels · one per line"
+              : "Message"
+          }
+          value={inputs.prompt}
+          rows={workflow.route === "image-match" ? 4 : 5}
+          placeholder={
+            workflow.route === "image-match"
+              ? "normal follow-up\nneeds clinician review\nunclear image quality"
+              : undefined
+          }
+          onChange={(value) =>
+            setInputs((current) => ({ ...current, prompt: value }))
+          }
+        />
+      )}
 
-        {workflow.accepts === "text" && (
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">
-              Report or visit context
-            </label>
-            <Textarea
-              rows={6}
-              value={inputs.text}
-              onChange={(event) =>
-                setInputs((current) => ({
-                  ...current,
-                  text: event.currentTarget.value,
-                }))
-              }
-              placeholder="Paste discharge summary, labs, prescription note, or visit instructions…"
-            />
-          </div>
-        )}
+      {workflow.accepts === "text" && (
+        <FieldText
+          label="Report context"
+          value={inputs.text}
+          rows={6}
+          placeholder="Paste discharge summary, labs, prescription note, or visit instructions…"
+          onChange={(value) =>
+            setInputs((current) => ({ ...current, text: value }))
+          }
+        />
+      )}
 
-        {needsFile && (
-          <FilePicker
-            kind={needsAudio ? "audio" : "image"}
-            file={inputs.file}
-            onChange={(file) =>
-              setInputs((current) => ({ ...current, file }))
-            }
-          />
-        )}
+      {needsFile && (
+        <FilePicker
+          kind={needsAudio ? "audio" : "image"}
+          file={inputs.file}
+          onChange={(file) =>
+            setInputs((current) => ({ ...current, file }))
+          }
+        />
+      )}
 
-        {needsImage && inputs.file && (
-          <FilePreview
-            key={fileKey(inputs.file)}
-            file={inputs.file}
-            kind="image"
-          />
-        )}
+      {needsImage && inputs.file && (
+        <FilePreview
+          key={fileKey(inputs.file)}
+          file={inputs.file}
+          kind="image"
+        />
+      )}
 
-        {needsAudio && inputs.file && (
-          <FilePreview
-            key={fileKey(inputs.file)}
-            file={inputs.file}
-            kind="audio"
-          />
-        )}
+      {needsAudio && inputs.file && (
+        <FilePreview
+          key={fileKey(inputs.file)}
+          file={inputs.file}
+          kind="audio"
+        />
+      )}
 
-        <Button
-          className="w-full"
-          onClick={onRun}
-          disabled={!canRun}
-        >
-          {status === "running" ? (
-            <>
-              <span className="inline-flex items-center gap-1">
-                <span className="size-1.5 animate-pulse rounded-full bg-current [animation-delay:-0.3s]" />
-                <span className="size-1.5 animate-pulse rounded-full bg-current [animation-delay:-0.15s]" />
-                <span className="size-1.5 animate-pulse rounded-full bg-current" />
-              </span>
-              Analyzing
-            </>
-          ) : (
-            <>
-              <Send className="size-4" />
-              Analyze
-            </>
-          )}
-        </Button>
-      </CardContent>
-    </Card>
+      <button
+        type="button"
+        onClick={onRun}
+        disabled={!canRun}
+        className={cn(
+          "w-full bg-ink px-6 py-3 font-sans text-sm font-semibold uppercase tracking-[0.2em] text-paper transition-colors",
+          "hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper",
+          !canRun && "cursor-not-allowed opacity-50 hover:bg-ink",
+        )}
+        aria-busy={status === "running"}
+      >
+        {status === "running" ? (
+          <span className="inline-flex items-center gap-2">
+            <span>Analyzing</span>
+            <span aria-hidden className="animate-pulse text-accent">
+              ▍
+            </span>
+          </span>
+        ) : (
+          <span>Analyze</span>
+        )}
+      </button>
+    </div>
+  );
+}
+
+function FieldText({
+  label,
+  value,
+  onChange,
+  placeholder,
+  rows,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  rows: number;
+}) {
+  return (
+    <div>
+      <label className="mb-2 block font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft">
+        {label}
+      </label>
+      <textarea
+        rows={rows}
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.currentTarget.value)}
+        className={cn(
+          "block w-full resize-y bg-transparent p-3 pl-0 font-sans text-base leading-relaxed text-ink",
+          "border-0 border-b-2 border-ink",
+          "placeholder:text-ink-faint",
+          "focus:border-accent focus:outline-none focus:ring-0",
+        )}
+      />
+    </div>
   );
 }
 
@@ -274,8 +318,8 @@ function FilePicker({
   }
 
   return (
-    <div className="space-y-1.5">
-      <label className="text-sm font-medium text-foreground">
+    <div>
+      <label className="mb-2 block font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft">
         {kind === "audio" ? "Audio file" : "Image file"}
       </label>
       <button
@@ -292,56 +336,48 @@ function FilePicker({
           pick(e.dataTransfer.files);
         }}
         className={cn(
-          "flex w-full items-center gap-3 rounded-md border border-dashed bg-muted/30 px-3 py-3 text-left text-sm transition-colors",
-          "hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          dragging ? "border-primary bg-primary/5" : "border-input",
+          "block w-full bg-paper-soft p-6 text-center font-mono text-xs uppercase tracking-[0.2em] transition-colors",
+          dragging
+            ? "border-2 border-accent bg-accent-soft text-ink"
+            : "border border-ink text-ink-soft hover:text-ink",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper",
         )}
       >
-        <span className="flex size-9 flex-shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground">
-          {file ? (
-            <FileText className="size-4" />
-          ) : (
-            <Upload className="size-4" />
-          )}
-        </span>
         {file ? (
-          <span className="min-w-0 flex-1">
-            <span className="block truncate font-medium text-foreground">
+          <span className="flex items-center justify-between gap-4">
+            <span className="min-w-0 flex-1 truncate text-left font-mono text-sm normal-case tracking-normal text-ink">
               {file.name}
             </span>
-            <span className="block text-xs text-muted-foreground">
+            <span className="font-mono text-xs uppercase tracking-[0.18em] tabular-nums text-ink-soft">
               {formatBytes(file.size)}
+            </span>
+            <span
+              role="button"
+              tabIndex={0}
+              aria-label="Remove file"
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onChange(null);
+                }
+              }}
+              className="border border-ink p-1 text-ink hover:bg-ink hover:text-paper"
+            >
+              <X className="size-3" />
             </span>
           </span>
         ) : (
-          <span className="min-w-0 flex-1">
-            <span className="block font-medium text-foreground">
-              Click or drop a {kind} file
+          <span className="flex flex-col items-center justify-center gap-3">
+            <Upload className="size-5 text-ink" />
+            <span>Drop a file or click</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">
+              {kind === "audio" ? "Any audio format" : "PNG · JPG · WebP"}
             </span>
-            <span className="block text-xs text-muted-foreground">
-              {kind === "audio" ? "Any audio format" : "PNG, JPG, WebP"}
-            </span>
-          </span>
-        )}
-        {file && (
-          <span
-            role="button"
-            tabIndex={0}
-            onClick={(e) => {
-              e.stopPropagation();
-              onChange(null);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                e.stopPropagation();
-                onChange(null);
-              }
-            }}
-            className="text-muted-foreground hover:text-foreground"
-            aria-label="Remove file"
-          >
-            <X className="size-4" />
           </span>
         )}
       </button>
@@ -369,148 +405,153 @@ function FilePreview({
     return () => URL.revokeObjectURL(url);
   }, [url]);
 
-  if (kind === "image") {
-    return (
-      <div className="overflow-hidden rounded-md border bg-muted/30 p-2">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={url}
-          alt={file.name}
-          className="mx-auto block max-h-48 w-auto rounded-sm object-contain"
-        />
-      </div>
-    );
-  }
+  return (
+    <figure className="space-y-2">
+      {kind === "image" ? (
+        <div className="border border-ink bg-paper-soft p-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={url}
+            alt={file.name}
+            className="mx-auto block max-h-56 w-auto object-contain"
+          />
+        </div>
+      ) : (
+        <div className="border border-ink bg-paper-soft p-3">
+          <audio src={url} controls className="w-full" />
+        </div>
+      )}
+      <figcaption className="flex items-center justify-between gap-4 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft">
+        <span className="truncate">
+          Fig. 01 — {file.name}
+        </span>
+        <span className="tabular-nums">{formatBytes(file.size)}</span>
+      </figcaption>
+    </figure>
+  );
+}
+
+function OutputBlock({
+  status,
+  error,
+  result,
+}: {
+  status: Status;
+  error: string | null;
+  result: InferResponse | null;
+}) {
+  const outputText = result?.output?.text ?? result?.output?.transcript ?? null;
+  const embedding = result?.output?.embedding ?? null;
+  const scores = result?.output?.scores ?? null;
+  const isIdleEmpty = status === "idle" && !result && !error;
 
   return (
-    <div className="rounded-md border bg-muted/30 p-3">
-      <audio src={url} controls className="w-full" />
+    <div aria-live="polite" aria-atomic="false" className="space-y-6">
+      {isIdleEmpty && (
+        <div className="border border-dashed border-ink p-8 text-center font-mono text-xs uppercase tracking-[0.2em] text-ink-faint">
+          Awaiting input
+        </div>
+      )}
+
+      {status === "running" && (
+        <div className="border border-ink p-8">
+          <div className="flex items-baseline gap-2 font-mono text-xs uppercase tracking-[0.2em] text-ink">
+            <span>Running</span>
+            <span aria-hidden className="animate-pulse text-accent">
+              ▍
+            </span>
+          </div>
+          <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft">
+            First call on a cold model can take a couple of minutes
+          </p>
+        </div>
+      )}
+
+      {error && (
+        <div className="border-2 border-[color:var(--destructive)] p-4">
+          <p className="font-mono text-xs uppercase tracking-[0.18em] text-[color:var(--destructive)]">
+            Error — {error}
+          </p>
+        </div>
+      )}
+
+      {outputText && (
+        <div className="py-2">
+          <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft">
+            {result?.output?.transcript && !result?.output?.text
+              ? "Transcript"
+              : "Response"}
+          </p>
+          <p className="whitespace-pre-wrap font-sans text-base leading-relaxed text-ink">
+            {outputText}
+          </p>
+        </div>
+      )}
+
+      {embedding && embedding.length > 0 && (
+        <div className="border border-ink p-4">
+          <div className="mb-3 flex items-baseline justify-between gap-3 font-mono text-[10px] uppercase tracking-[0.18em]">
+            <span className="text-ink">
+              Embedding —{" "}
+              <span className="tabular-nums text-accent">
+                {embedding.length}
+              </span>{" "}
+              dims
+            </span>
+            <span className="text-ink-soft">First 24 shown</span>
+          </div>
+          <p className="font-mono text-xs leading-relaxed text-ink-soft">
+            {embedding
+              .slice(0, 24)
+              .map((n) => n.toFixed(3))
+              .join(", ")}
+          </p>
+        </div>
+      )}
+
+      {scores && Object.keys(scores).length > 0 && (
+        <div className="border border-ink">
+          <div className="border-b border-ink px-4 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft">
+            Scores
+          </div>
+          <ul className="divide-y divide-ink/30">
+            {Object.entries(scores).map(([key, value]) => (
+              <li
+                key={key}
+                className="flex items-baseline justify-between gap-4 px-4 py-2"
+              >
+                <span className="font-mono text-xs uppercase tracking-[0.16em] text-ink">
+                  {key}
+                </span>
+                <span className="font-mono text-xs tabular-nums text-ink-soft">
+                  {value.toFixed(3)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
 
-function OutputCard({
-  workflow,
-  result,
-  status,
-  error,
-}: {
-  workflow: Workflow;
-  result: InferResponse | null;
-  status: "idle" | "running";
-  error: string | null;
-}) {
-  const Icon = workflow.icon;
-  const outputText =
-    result?.output?.text ??
-    result?.output?.transcript ??
-    (result?.output?.embedding
-      ? `Embedding preview (${result.output.embedding.length} of model dim): ${result.output.embedding
-          .slice(0, 24)
-          .map((n) => n.toFixed(3))
-          .join(", ")}`
-      : "");
-
+function QuestionsList({ questions }: { questions: string[] }) {
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <span className="flex size-9 flex-shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-              <Icon className="size-4" />
-            </span>
-            <div>
-              <CardTitle>{workflow.label}</CardTitle>
-              <CardDescription className="font-mono text-xs">
-                {workflow.model}
-              </CardDescription>
-            </div>
-          </div>
-          <Badge variant="secondary" className="font-mono">
-            {workflow.task}
-          </Badge>
-        </div>
-      </CardHeader>
-      <Separator />
-      <CardContent
-        className="space-y-3 pt-6"
-        aria-live="polite"
-        aria-atomic="false"
-      >
-        {status === "running" && (
-          <Alert>
-            <Stethoscope />
-            <AlertTitle>Analyzing your input</AlertTitle>
-            <AlertDescription>
-              First call on a cold model can take a couple of minutes.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {error && (
-          <Alert variant="destructive">
-            <ShieldAlert />
-            <AlertTitle>Inference failed</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {!result && status === "idle" && !error && (
-          <div className="rounded-md border bg-muted/30 p-6 text-sm text-muted-foreground">
-            Add required input, then analyze. Results appear here.
-          </div>
-        )}
-
-        {outputText && (
-          <div className="rounded-md border bg-card p-4">
-            <div className="flex items-start gap-3">
-              <span className="mt-0.5 flex size-6 flex-shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                <ClipboardCheck className="size-3.5" />
-              </span>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-                {outputText}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {result?.output?.scores && (
-          <div className="rounded-md border bg-card p-4">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Scores
-            </p>
-            <pre className="overflow-x-auto font-mono text-xs text-foreground">
-              {JSON.stringify(result.output.scores, null, 2)}
-            </pre>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function QuestionsCard({ workflow }: { workflow: Workflow }) {
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <span className="flex size-8 items-center justify-center rounded-md bg-amber-100 text-amber-700">
-            <Stethoscope className="size-4" />
+    <ol className="space-y-0">
+      {questions.map((question, index) => (
+        <li
+          key={question}
+          className="flex gap-4 border-b border-ink-faint/40 py-3 last:border-b-0"
+        >
+          <span className="font-mono text-xs tabular-nums text-accent">
+            ({String.fromCharCode(97 + index)})
           </span>
-          <CardTitle className="text-base">Ask your clinician</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <ul className="space-y-2 text-sm text-foreground">
-          {workflow.questions.map((question) => (
-            <li key={question} className="flex gap-2">
-              <span className="mt-1.5 size-1.5 flex-shrink-0 rounded-full bg-primary" />
-              <span>{question}</span>
-            </li>
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
+          <span className="font-sans text-sm leading-relaxed text-ink">
+            {question}
+          </span>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -518,7 +559,8 @@ function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error("File read failed."));
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("File read failed."));
     reader.readAsDataURL(file);
   });
 }
