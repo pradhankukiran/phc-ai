@@ -17,12 +17,14 @@ volume = modal.Volume.from_name(
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
+    .apt_install("git", "libsndfile1", "ffmpeg")
     .pip_install_from_requirements("modal/requirements.txt")
     .env(
         {
             "HF_HOME": "/models/huggingface",
             "TRANSFORMERS_CACHE": "/models/huggingface",
             "MODEL_CACHE_DIR": "/models/huggingface",
+            "TF_USE_LEGACY_KERAS": "1",
         }
     )
 )

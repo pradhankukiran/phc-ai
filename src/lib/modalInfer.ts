@@ -14,6 +14,7 @@ export type InferRequest = {
   inputs: {
     prompt?: string | null;
     text?: string | null;
+    labels?: string[] | null;
     image_base64?: string | null;
     audio_base64?: string | null;
   };
@@ -22,6 +23,7 @@ export type InferRequest = {
     temperature?: number;
     top_p?: number;
     return_embeddings?: boolean;
+    embedding_limit?: number;
   };
 };
 

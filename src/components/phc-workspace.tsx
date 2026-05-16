@@ -8,12 +8,12 @@ import {
   Card,
   Container,
   Divider,
+  FileInput,
   Grid,
   Group,
+  JsonInput,
   List,
   Paper,
-  Progress,
-  SimpleGrid,
   Stack,
   Tabs,
   Text,
@@ -32,27 +32,25 @@ import {
   FileImage,
   HeartPulse,
   Microscope,
-  Pill,
   Search,
   Send,
   ShieldAlert,
   Sparkles,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { infer, type InferResponse, type PhcModel, type PhcTask } from "@/lib/modalInfer";
 
 type Workflow = {
   id: string;
   label: string;
   shortLabel: string;
-  model: string;
-  task: string;
+  model: PhcModel;
+  task: PhcTask;
   icon: LucideIcon;
-  reviewed: string;
+  accepts: "text" | "audio" | "image" | "image-text";
   prompt: string;
-  output: string[];
+  help: string;
   questions: string[];
-  limits: string;
-  score: number;
 };
 
 const workflows: Workflow[] = [
@@ -63,21 +61,15 @@ const workflows: Workflow[] = [
     model: "google/medgemma-1.5-4b-it",
     task: "chat",
     icon: ClipboardList,
-    reviewed: "Clinic note, lab comments, discharge instructions",
+    accepts: "text",
     prompt:
-      "Explain my follow-up visit note in plain language. Highlight what changed, what I should monitor, and questions for my doctor.",
-    output: [
-      "Blood pressure remains above target in this synthetic chart, so follow-up tracking matters.",
-      "Kidney and liver markers are presented as stable. Do not change medication without clinician confirmation.",
-      "Next visit should clarify home readings, side effects, and whether repeat labs are needed.",
-    ],
+      "Explain this health report in plain language. List key findings, what I may have missed, and questions to ask my doctor.",
+    help: "Paste real or sample visit notes, lab comments, discharge instructions, or report text.",
     questions: [
-      "Which symptoms should make me seek urgent care?",
-      "When should I repeat labs?",
-      "What home readings should I record?",
+      "What changed since my last visit?",
+      "Which follow-ups are time sensitive?",
+      "What should I confirm with my doctor?",
     ],
-    limits: "Draft explanation from uploaded text. It cannot verify missing context.",
-    score: 82,
   },
   {
     id: "asr",
@@ -86,44 +78,31 @@ const workflows: Workflow[] = [
     model: "google/medasr",
     task: "asr",
     icon: AudioLines,
-    reviewed: "Recorded visit audio or dictated instructions",
-    prompt:
-      "Transcribe this synthetic visit audio, then turn clinician instructions into a checklist.",
-    output: [
-      "Transcript: continue current medication, track morning readings, schedule follow-up after labs.",
-      "Checklist: take meds as prescribed, log blood pressure, complete labs, book review appointment.",
-      "Unclear audio segments are marked for manual confirmation.",
-    ],
+    accepts: "audio",
+    prompt: "Upload visit audio for transcription.",
+    help: "Upload an audio file. Backend sends it to MedASR and returns transcript.",
     questions: [
       "Did I capture dosage timing correctly?",
-      "Should I bring my home monitor to the next visit?",
-      "Who should I call if readings stay high?",
+      "Which instructions are unclear?",
+      "What needs follow-up?",
     ],
-    limits: "Audio quality affects transcript accuracy. Confirm all instructions with care team.",
-    score: 74,
   },
   {
     id: "siglip",
     label: "Image Match",
     shortLabel: "Images",
     model: "google/medsiglip-448",
-    task: "image_embed",
+    task: "classify",
     icon: Search,
-    reviewed: "Medical image embedding and similarity demo",
+    accepts: "image-text",
     prompt:
-      "Compare this synthetic medical image against demo reference images and explain similar visual patterns.",
-    output: [
-      "Closest demo cluster: routine follow-up images with low-acuity visual pattern labels.",
-      "Visual similarity does not mean same diagnosis.",
-      "Use match results to organize images for clinician review.",
-    ],
+      "normal follow-up image\nneeds clinician review\nunclear image quality",
+    help: "Upload an image and provide candidate labels, one per line, for MedSigLIP scores.",
     questions: [
       "Does this image need formal review?",
       "Should I track change over time?",
-      "What image quality would help comparison?",
+      "Is image quality good enough?",
     ],
-    limits: "Similarity search only. Not diagnostic classification.",
-    score: 68,
   },
   {
     id: "cxr",
@@ -132,21 +111,14 @@ const workflows: Workflow[] = [
     model: "google/cxr-foundation",
     task: "image_embed",
     icon: Bone,
-    reviewed: "Chest X-ray image embeddings",
-    prompt:
-      "Explain this synthetic chest X-ray report in patient-friendly language and list follow-up questions.",
-    output: [
-      "Report language suggests no emergency finding in this synthetic example.",
-      "Follow-up depends on symptoms, prior imaging, and clinician interpretation.",
-      "Bring prior X-rays if available because comparison can change meaning.",
-    ],
+    accepts: "image",
+    prompt: "Upload a chest X-ray image for CXR Foundation embedding.",
+    help: "Returns CXR embedding vector preview. Use for search/similarity, not diagnosis.",
     questions: [
-      "Was anything new compared with my prior scan?",
+      "Was anything new compared with prior scan?",
       "Do symptoms match imaging findings?",
       "Is repeat imaging needed?",
     ],
-    limits: "Embedding workflow, not radiologist replacement.",
-    score: 71,
   },
   {
     id: "derm",
@@ -155,21 +127,14 @@ const workflows: Workflow[] = [
     model: "google/derm-foundation",
     task: "image_embed",
     icon: FileImage,
-    reviewed: "Dermatology image embeddings",
-    prompt:
-      "Explain what my synthetic dermatology visit summary says and what changes I should document.",
-    output: [
-      "The note focuses on monitoring size, color, border change, symptoms, and timing.",
-      "Consistent photos under similar lighting help clinician comparison.",
-      "Do not self-treat suspicious or changing lesions.",
-    ],
+    accepts: "image",
+    prompt: "Upload a dermatology image for Derm Foundation embedding.",
+    help: "Returns Derm Foundation embedding preview. Use for retrieval or organization.",
     questions: [
       "Which changes matter most?",
       "How often should I photograph it?",
-      "When should I book urgent review?",
+      "When should I book review?",
     ],
-    limits: "Cannot diagnose skin cancer or replace in-person exam.",
-    score: 79,
   },
   {
     id: "path",
@@ -178,40 +143,102 @@ const workflows: Workflow[] = [
     model: "google/path-foundation",
     task: "image_embed",
     icon: Microscope,
-    reviewed: "Pathology report terms and slide embeddings",
-    prompt:
-      "Translate this synthetic pathology report into plain language and list points to ask my specialist.",
-    output: [
-      "Pathology terms describe tissue features seen under microscope.",
-      "Meaning depends on sample site, clinical history, margins, and specialist plan.",
-      "Ask clinician to explain grade, margins, and treatment impact if mentioned.",
-    ],
+    accepts: "image",
+    prompt: "Upload a 224x224 pathology patch or image crop for Path Foundation embedding.",
+    help: "Returns Path Foundation embedding preview. Whole-slide tiling is not implemented.",
     questions: [
       "What result changes my treatment plan?",
       "Were margins clear?",
-      "Do I need another biopsy or specialist visit?",
+      "Do I need specialist review?",
     ],
-    limits: "Educational explanation only. Specialist interpretation required.",
-    score: 64,
   },
 ];
 
-const visitFacts = [
-  ["Blood pressure", "142/88", "Track at home"],
-  ["A1C", "5.8%", "Discuss prevention"],
-  ["eGFR", "92", "Stable"],
-  ["Next step", "Labs", "Before review"],
-];
+type Inputs = {
+  prompt: string;
+  text: string;
+  file: File | null;
+};
+
+const defaultInputs: Inputs = {
+  prompt: workflows[0].prompt,
+  text: "",
+  file: null,
+};
 
 export function PhcWorkspace() {
-  const [input, setInput] = useState(workflows[0].prompt);
-  const [status, setStatus] = useState<"idle" | "running" | "ready">("idle");
-  const activePrompt = useMemo(() => input.trim() || workflows[0].prompt, [input]);
+  const [active, setActive] = useState(workflows[0].id);
+  const [inputs, setInputs] = useState<Inputs>(defaultInputs);
+  const [result, setResult] = useState<InferResponse | null>(null);
+  const [status, setStatus] = useState<"idle" | "running">("idle");
+  const [error, setError] = useState<string | null>(null);
 
-  function runDemo() {
-    setStatus("running");
-    window.setTimeout(() => setStatus("ready"), 650);
+  const workflow = useMemo(
+    () => workflows.find((item) => item.id === active) ?? workflows[0],
+    [active],
+  );
+
+  function switchTab(value: string | null) {
+    if (!value) return;
+    const next = workflows.find((item) => item.id === value) ?? workflows[0];
+    setActive(next.id);
+    setInputs({ prompt: next.prompt, text: "", file: null });
+    setResult(null);
+    setError(null);
   }
+
+  async function runInference() {
+    setStatus("running");
+    setError(null);
+    setResult(null);
+
+    try {
+      const fileBase64 = inputs.file ? await fileToDataUrl(inputs.file) : null;
+      const labels =
+        workflow.id === "siglip"
+          ? inputs.prompt
+              .split("\n")
+              .map((label) => label.trim())
+              .filter(Boolean)
+          : undefined;
+
+      const response = await infer({
+        model: workflow.model,
+        task: workflow.task,
+        inputs: {
+          prompt: inputs.prompt,
+          text: inputs.text,
+          labels,
+          image_base64:
+            workflow.accepts === "image" || workflow.accepts === "image-text"
+              ? fileBase64
+              : null,
+          audio_base64: workflow.accepts === "audio" ? fileBase64 : null,
+        },
+        options: {
+          max_new_tokens: 768,
+          temperature: 0.2,
+          top_p: 0.9,
+          embedding_limit: 256,
+          return_embeddings: true,
+        },
+      });
+
+      if (response.status === "error") {
+        setError(response.message ?? response.code ?? "Inference failed.");
+      }
+      setResult(response);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Inference failed.");
+    } finally {
+      setStatus("idle");
+    }
+  }
+
+  const canRun =
+    workflow.accepts === "text"
+      ? Boolean(inputs.prompt.trim() || inputs.text.trim())
+      : Boolean(inputs.file);
 
   return (
     <Box bg="#f6faf9" mih="100vh">
@@ -228,7 +255,7 @@ export function PhcWorkspace() {
                     Portfolio prototype
                   </Badge>
                   <Badge color="yellow" variant="light" leftSection={<ShieldAlert size={14} />}>
-                    AI draft
+                    Real model endpoint
                   </Badge>
                 </Group>
 
@@ -240,15 +267,14 @@ export function PhcWorkspace() {
                     Understand your checkup after the visit.
                   </Text>
                   <Text size="md" maw={680} c="dimmed" lh={1.7}>
-                    Upload or paste synthetic reports, visit notes, images, or
-                    doctor instructions. PHC-AI turns them into plain-language
-                    summaries and questions for your care team.
+                    Connects to a Modal GPU endpoint running MedGemma, MedASR,
+                    MedSigLIP, CXR Foundation, Derm Foundation, and Path Foundation.
                   </Text>
                 </Stack>
 
                 <Alert color="yellow" radius="md" icon={<ShieldAlert size={18} />}>
-                  PHC-AI does not diagnose, prescribe, or replace licensed
-                  medical care. Use synthetic/demo data only.
+                  Portfolio build. Do not upload PHI unless you control compliant
+                  deployment, storage, logging, and data handling.
                 </Alert>
               </Stack>
             </Grid.Col>
@@ -258,28 +284,21 @@ export function PhcWorkspace() {
                 <Stack gap="md">
                   <Group justify="space-between" align="flex-start">
                     <div>
-                      <Text fw={700}>Your post-visit packet</Text>
+                      <Text fw={700}>Single Modal endpoint</Text>
                       <Text size="sm" c="dimmed">
-                        Synthetic wellness follow-up
+                        Lazy loads one model per request
                       </Text>
                     </div>
                     <ThemeIcon color="teal" variant="light" size="lg">
                       <HeartPulse size={22} />
                     </ThemeIcon>
                   </Group>
-                  <SimpleGrid cols={2}>
-                    {visitFacts.map(([label, value, helper]) => (
-                      <Paper key={label} radius="md" p="sm" bg="#f3f8f7">
-                        <Text size="xs" c="dimmed">
-                          {label}
-                        </Text>
-                        <Text fw={700}>{value}</Text>
-                        <Text size="xs" c="teal.8">
-                          {helper}
-                        </Text>
-                      </Paper>
-                    ))}
-                  </SimpleGrid>
+                  <List size="sm" spacing="xs" c="dimmed">
+                    <List.Item>`/infer` dispatches by model param</List.Item>
+                    <List.Item>HF weights cached on Modal Volume</List.Item>
+                    <List.Item>MAX_LOADED_MODELS defaults to 1</List.Item>
+                    <List.Item>No synthetic response fallback</List.Item>
+                  </List>
                 </Stack>
               </Paper>
             </Grid.Col>
@@ -288,103 +307,135 @@ export function PhcWorkspace() {
       </Box>
 
       <Container size="xl" py="lg">
-        <Grid gap="lg">
-          <Grid.Col span={{ base: 12, lg: 4 }}>
-            <Stack gap="md">
-              <Card radius="lg" shadow="sm" withBorder>
-                <Stack gap="md">
-                  <Group>
-                    <ThemeIcon color="teal" variant="light" size="lg">
-                      <Brain size={22} />
-                    </ThemeIcon>
-                    <div>
-                      <Text fw={700}>Ask about your visit</Text>
-                      <Text size="sm" c="dimmed">
-                        Plain language, follow-up focused
-                      </Text>
-                    </div>
-                  </Group>
+        <Tabs value={active} onChange={switchTab} variant="pills" radius="md" color="teal">
+          <Tabs.List grow>
+            {workflows.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Tabs.Tab key={item.id} value={item.id} leftSection={<Icon size={16} />}>
+                  {item.shortLabel}
+                </Tabs.Tab>
+              );
+            })}
+          </Tabs.List>
 
-                  <Textarea
-                    minRows={6}
-                    value={input}
-                    onChange={(event) => setInput(event.currentTarget.value)}
-                    placeholder="Paste visit note or ask a question..."
-                  />
+          <Grid gap="lg" mt="md">
+            <Grid.Col span={{ base: 12, lg: 4 }}>
+              <InputPanel
+                canRun={canRun}
+                inputs={inputs}
+                setInputs={setInputs}
+                status={status}
+                workflow={workflow}
+                onRun={runInference}
+              />
+            </Grid.Col>
 
-                  <Button
-                    color="teal"
-                    leftSection={<Send size={16} />}
-                    loading={status === "running"}
-                    onClick={runDemo}
-                  >
-                    Run demo analysis
-                  </Button>
-
-                  <Text size="xs" c="dimmed" lh={1.5}>
-                    Prompt: {activePrompt.slice(0, 130)}
-                    {activePrompt.length > 130 ? "..." : ""}
-                  </Text>
-                </Stack>
-              </Card>
-
-              <Card radius="lg" shadow="sm" withBorder>
-                <Stack gap="sm">
-                  <Group>
-                    <ThemeIcon color="blue" variant="light">
-                      <Pill size={18} />
-                    </ThemeIcon>
-                    <Text fw={700}>What PHC-AI helps with</Text>
-                  </Group>
-                  <List size="sm" spacing="xs" c="dimmed">
-                    <List.Item>Explain doctor notes after appointment</List.Item>
-                    <List.Item>Turn instructions into checklists</List.Item>
-                    <List.Item>Prepare questions for next visit</List.Item>
-                    <List.Item>Organize imaging demos by model</List.Item>
-                  </List>
-                </Stack>
-              </Card>
-            </Stack>
-          </Grid.Col>
-
-          <Grid.Col span={{ base: 12, lg: 8 }}>
-            <Tabs defaultValue="visit" variant="pills" radius="md" color="teal">
-              <Tabs.List grow>
-                {workflows.map((workflow) => {
-                  const Icon = workflow.icon;
-                  return (
-                    <Tabs.Tab
-                      key={workflow.id}
-                      value={workflow.id}
-                      leftSection={<Icon size={16} />}
-                    >
-                      {workflow.shortLabel}
-                    </Tabs.Tab>
-                  );
-                })}
-              </Tabs.List>
-
-              {workflows.map((workflow) => (
-                <Tabs.Panel key={workflow.id} value={workflow.id} pt="md">
-                  <WorkflowPanel status={status} workflow={workflow} />
-                </Tabs.Panel>
-              ))}
-            </Tabs>
-          </Grid.Col>
-        </Grid>
+            <Grid.Col span={{ base: 12, lg: 8 }}>
+              <OutputPanel error={error} result={result} status={status} workflow={workflow} />
+            </Grid.Col>
+          </Grid>
+        </Tabs>
       </Container>
     </Box>
   );
 }
 
-function WorkflowPanel({
+function InputPanel({
   workflow,
+  inputs,
+  setInputs,
   status,
+  canRun,
+  onRun,
 }: {
   workflow: Workflow;
-  status: "idle" | "running" | "ready";
+  inputs: Inputs;
+  setInputs: React.Dispatch<React.SetStateAction<Inputs>>;
+  status: "idle" | "running";
+  canRun: boolean;
+  onRun: () => void;
+}) {
+  const needsFile = workflow.accepts !== "text";
+
+  return (
+    <Card radius="lg" shadow="sm" withBorder>
+      <Stack gap="md">
+        <Group>
+          <ThemeIcon color="teal" variant="light" size="lg">
+            <Brain size={22} />
+          </ThemeIcon>
+          <div>
+            <Text fw={700}>{workflow.label}</Text>
+            <Text size="sm" c="dimmed">
+              {workflow.help}
+            </Text>
+          </div>
+        </Group>
+
+        {(workflow.accepts === "text" || workflow.accepts === "image-text") && (
+          <Textarea
+            label={workflow.id === "siglip" ? "Candidate labels" : "Question or instruction"}
+            minRows={workflow.id === "siglip" ? 4 : 5}
+            value={inputs.prompt}
+            onChange={(event) =>
+              setInputs((current) => ({ ...current, prompt: event.currentTarget.value }))
+            }
+          />
+        )}
+
+        {workflow.accepts === "text" && (
+          <Textarea
+            label="Report or visit text"
+            minRows={8}
+            value={inputs.text}
+            onChange={(event) =>
+              setInputs((current) => ({ ...current, text: event.currentTarget.value }))
+            }
+            placeholder="Paste discharge summary, labs, prescription note, or visit instructions..."
+          />
+        )}
+
+        {needsFile && (
+          <FileInput
+            accept={workflow.accepts === "audio" ? "audio/*" : "image/*"}
+            label={workflow.accepts === "audio" ? "Audio file" : "Image file"}
+            placeholder="Choose file"
+            value={inputs.file}
+            onChange={(file) => setInputs((current) => ({ ...current, file }))}
+          />
+        )}
+
+        <Button
+          color="teal"
+          leftSection={<Send size={16} />}
+          loading={status === "running"}
+          disabled={!canRun}
+          onClick={onRun}
+        >
+          Run real inference
+        </Button>
+      </Stack>
+    </Card>
+  );
+}
+
+function OutputPanel({
+  workflow,
+  result,
+  status,
+  error,
+}: {
+  workflow: Workflow;
+  result: InferResponse | null;
+  status: "idle" | "running";
+  error: string | null;
 }) {
   const Icon = workflow.icon;
+  const outputText =
+    result?.output?.text ??
+    result?.output?.transcript ??
+    (result?.output?.embedding ? `Embedding preview: ${result.output.embedding.slice(0, 24).join(", ")}` : "");
 
   return (
     <Grid gap="md">
@@ -401,7 +452,7 @@ function WorkflowPanel({
                     {workflow.label}
                   </Title>
                   <Text size="sm" c="dimmed">
-                    {workflow.reviewed}
+                    {workflow.model}
                   </Text>
                 </div>
               </Group>
@@ -410,38 +461,50 @@ function WorkflowPanel({
               </Badge>
             </Group>
 
-            <Paper radius="md" p="md" bg="#f7fbfa" withBorder>
-              <Group justify="space-between" mb={8}>
-                <Text size="sm" fw={700}>
-                  Readiness signal
-                </Text>
-                <Text size="sm" c="teal.8" fw={700}>
-                  {workflow.score}%
-                </Text>
-              </Group>
-              <Progress value={workflow.score} color="teal" radius="xl" />
-              <Text size="xs" c="dimmed" mt={8}>
-                Demo score for completeness of synthetic packet.
-              </Text>
-            </Paper>
-
             <Divider />
 
-            <Stack gap="sm">
-              <Text fw={700}>Plain-language explanation</Text>
-              {workflow.output.map((item) => (
-                <Paper key={item} radius="md" p="md" bg="#fbfefd" withBorder>
-                  <Group align="flex-start" gap="sm">
-                    <ThemeIcon color="teal" variant="light" size="sm">
-                      <ClipboardCheck size={14} />
-                    </ThemeIcon>
-                    <Text size="sm" lh={1.6} c="#31443f">
-                      {status === "running" ? "Preparing model response..." : item}
-                    </Text>
-                  </Group>
-                </Paper>
-              ))}
-            </Stack>
+            {status === "running" && (
+              <Alert color="teal" icon={<Sparkles size={18} />}>
+                Calling Modal. First call may download and load model weights.
+              </Alert>
+            )}
+
+            {error && (
+              <Alert color="red" icon={<ShieldAlert size={18} />}>
+                {error}
+              </Alert>
+            )}
+
+            {!result && status === "idle" && !error && (
+              <Paper radius="md" p="lg" bg="#f7fbfa" withBorder>
+                <Text c="dimmed">
+                  Add required input, then run inference. Output from Modal will
+                  appear here.
+                </Text>
+              </Paper>
+            )}
+
+            {outputText && (
+              <Paper radius="md" p="md" bg="#fbfefd" withBorder>
+                <Group align="flex-start" gap="sm">
+                  <ThemeIcon color="teal" variant="light" size="sm">
+                    <ClipboardCheck size={14} />
+                  </ThemeIcon>
+                  <Text size="sm" lh={1.7} c="#31443f" style={{ whiteSpace: "pre-wrap" }}>
+                    {outputText}
+                  </Text>
+                </Group>
+              </Paper>
+            )}
+
+            {result?.output?.scores && (
+              <JsonInput
+                label="Scores"
+                value={JSON.stringify(result.output.scores, null, 2)}
+                readOnly
+                autosize
+              />
+            )}
           </Stack>
         </Card>
       </Grid.Col>
@@ -454,10 +517,16 @@ function WorkflowPanel({
                 <ThemeIcon color="yellow" variant="light">
                   <Sparkles size={18} />
                 </ThemeIcon>
-                <Text fw={700}>Model</Text>
+                <Text fw={700}>Runtime</Text>
               </Group>
               <Text size="sm" c="dimmed">
-                {workflow.model}
+                Cold start: {String(result?.cold_start ?? false)}
+              </Text>
+              <Text size="sm" c="dimmed">
+                Latency: {result?.latency_ms ? `${result.latency_ms}ms` : "pending"}
+              </Text>
+              <Text size="sm" c="dimmed">
+                Cached: {result?.meta?.cached_models?.join(", ") || "none"}
               </Text>
             </Stack>
           </Card>
@@ -474,10 +543,22 @@ function WorkflowPanel({
           </Card>
 
           <Alert color="gray" radius="md" icon={<ShieldAlert size={18} />}>
-            <Text size="sm">{workflow.limits}</Text>
+            <Text size="sm">
+              Outputs explain or embed provided material. They are not diagnosis,
+              prescriptions, or emergency guidance.
+            </Text>
           </Alert>
         </Stack>
       </Grid.Col>
     </Grid>
   );
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("File read failed."));
+    reader.readAsDataURL(file);
+  });
 }

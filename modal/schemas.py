@@ -18,6 +18,7 @@ Task = Literal["chat", "asr", "image_embed", "classify", "similarity"]
 class InferInputs(BaseModel):
     prompt: str | None = None
     text: str | None = None
+    labels: list[str] | None = None
     image_base64: str | None = None
     audio_base64: str | None = None
 
@@ -27,6 +28,7 @@ class InferOptions(BaseModel):
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     top_p: float = Field(default=0.9, ge=0.0, le=1.0)
     return_embeddings: bool = False
+    embedding_limit: int = Field(default=512, ge=1, le=8192)
 
 
 class InferRequest(BaseModel):

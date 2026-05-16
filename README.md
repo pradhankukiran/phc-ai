@@ -2,8 +2,8 @@
 
 Personal Health Checkup AI portfolio prototype.
 
-PHC-AI explains synthetic post-visit materials after a real clinic or hospital
-visit: notes, reports, instructions, images, and audio. It is not for diagnosis,
+PHC-AI explains post-visit materials after a clinic or hospital visit: notes,
+reports, instructions, images, and audio. It is not for diagnosis,
 prescribing, or clinical use.
 
 ## Stack
@@ -11,9 +11,9 @@ prescribing, or clinical use.
 - Next.js App Router
 - TypeScript
 - Tailwind CSS
-- shadcn-style UI primitives
+- Mantine UI
 - lucide-react icons
-- Modal FastAPI backend scaffold
+- Modal FastAPI backend
 - Single `/infer` endpoint
 - Vercel frontend deploy target
 
@@ -23,7 +23,7 @@ prescribing, or clinical use.
 | --- | --- | --- |
 | Visit Notes | `google/medgemma-1.5-4b-it` | `chat` |
 | Conversation | `google/medasr` | `asr` |
-| Image Match | `google/medsiglip-448` | `image_embed` |
+| Image Match | `google/medsiglip-448` | `classify` |
 | Chest X-ray | `google/cxr-foundation` | `image_embed` |
 | Skin | `google/derm-foundation` | `image_embed` |
 | Pathology | `google/path-foundation` | `image_embed` |
@@ -50,19 +50,19 @@ Set frontend env:
 NEXT_PUBLIC_MODAL_INFER_URL=https://your-workspace--phc-ai-medical-models-infer.modal.run/infer
 ```
 
-Default backend is demo-safe:
+Backend runtime:
 
 ```bash
-PHC_AI_DEMO_MODE=1
 MAX_LOADED_MODELS=1
 MODAL_GPU=L40S
+ALLOWED_ORIGINS=http://localhost:3000,https://your-domain.vercel.app
 ```
 
-Real model adapters belong in `modal/model_registry.py`.
+All six HAI-DEF repos are gated. The Hugging Face token must be from an
+account that accepted each model license.
 
 ## Safety Scope
 
-- Synthetic/demo data only
-- No PHI upload
+- Do not upload PHI unless deployment is compliant
 - AI draft copy shown in UI
 - No diagnosis, prescribing, or emergency guidance
