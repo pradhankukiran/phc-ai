@@ -1,12 +1,36 @@
 "use client";
 
 import {
+  Alert,
+  Badge,
+  Box,
+  Button,
+  Card,
+  Container,
+  Divider,
+  Grid,
+  Group,
+  List,
+  Paper,
+  Progress,
+  SimpleGrid,
+  Stack,
+  Tabs,
+  Text,
+  Textarea,
+  ThemeIcon,
+  Title,
+} from "@mantine/core";
+import type { LucideIcon } from "lucide-react";
+import {
   AudioLines,
   BadgeCheck,
   Bone,
   Brain,
+  ClipboardCheck,
   ClipboardList,
   FileImage,
+  HeartPulse,
   Microscope,
   Pill,
   Search,
@@ -15,38 +39,27 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 
 type Workflow = {
   id: string;
   label: string;
+  shortLabel: string;
   model: string;
   task: string;
-  icon: typeof ClipboardList;
+  icon: LucideIcon;
   reviewed: string;
   prompt: string;
   output: string[];
   questions: string[];
   limits: string;
+  score: number;
 };
 
 const workflows: Workflow[] = [
   {
     id: "visit",
     label: "Visit Notes",
+    shortLabel: "Notes",
     model: "google/medgemma-1.5-4b-it",
     task: "chat",
     icon: ClipboardList,
@@ -55,7 +68,7 @@ const workflows: Workflow[] = [
       "Explain my follow-up visit note in plain language. Highlight what changed, what I should monitor, and questions for my doctor.",
     output: [
       "Blood pressure remains above target in this synthetic chart, so follow-up tracking matters.",
-      "Kidney and liver markers are presented as stable. No medication change should be made without clinician confirmation.",
+      "Kidney and liver markers are presented as stable. Do not change medication without clinician confirmation.",
       "Next visit should clarify home readings, side effects, and whether repeat labs are needed.",
     ],
     questions: [
@@ -64,10 +77,12 @@ const workflows: Workflow[] = [
       "What home readings should I record?",
     ],
     limits: "Draft explanation from uploaded text. It cannot verify missing context.",
+    score: 82,
   },
   {
     id: "asr",
     label: "Conversation",
+    shortLabel: "Audio",
     model: "google/medasr",
     task: "asr",
     icon: AudioLines,
@@ -85,10 +100,12 @@ const workflows: Workflow[] = [
       "Who should I call if readings stay high?",
     ],
     limits: "Audio quality affects transcript accuracy. Confirm all instructions with care team.",
+    score: 74,
   },
   {
     id: "siglip",
     label: "Image Match",
+    shortLabel: "Images",
     model: "google/medsiglip-448",
     task: "image_embed",
     icon: Search,
@@ -106,10 +123,12 @@ const workflows: Workflow[] = [
       "What image quality would help comparison?",
     ],
     limits: "Similarity search only. Not diagnostic classification.",
+    score: 68,
   },
   {
     id: "cxr",
     label: "Chest X-ray",
+    shortLabel: "CXR",
     model: "google/cxr-foundation",
     task: "image_embed",
     icon: Bone,
@@ -117,7 +136,7 @@ const workflows: Workflow[] = [
     prompt:
       "Explain this synthetic chest X-ray report in patient-friendly language and list follow-up questions.",
     output: [
-      "The report language suggests no emergency finding in this synthetic example.",
+      "Report language suggests no emergency finding in this synthetic example.",
       "Follow-up depends on symptoms, prior imaging, and clinician interpretation.",
       "Bring prior X-rays if available because comparison can change meaning.",
     ],
@@ -127,10 +146,12 @@ const workflows: Workflow[] = [
       "Is repeat imaging needed?",
     ],
     limits: "Embedding workflow, not radiologist replacement.",
+    score: 71,
   },
   {
     id: "derm",
     label: "Skin",
+    shortLabel: "Skin",
     model: "google/derm-foundation",
     task: "image_embed",
     icon: FileImage,
@@ -148,10 +169,12 @@ const workflows: Workflow[] = [
       "When should I book urgent review?",
     ],
     limits: "Cannot diagnose skin cancer or replace in-person exam.",
+    score: 79,
   },
   {
     id: "path",
     label: "Pathology",
+    shortLabel: "Path",
     model: "google/path-foundation",
     task: "image_embed",
     icon: Microscope,
@@ -169,14 +192,15 @@ const workflows: Workflow[] = [
       "Do I need another biopsy or specialist visit?",
     ],
     limits: "Educational explanation only. Specialist interpretation required.",
+    score: 64,
   },
 ];
 
-const modelStats = [
-  ["Modal endpoint", "single /infer"],
-  ["GPU", "L40S or A100-80GB"],
-  ["Cache", "lazy model load"],
-  ["Data", "synthetic demo only"],
+const visitFacts = [
+  ["Blood pressure", "142/88", "Track at home"],
+  ["A1C", "5.8%", "Discuss prevention"],
+  ["eGFR", "92", "Stable"],
+  ["Next step", "Labs", "Before review"],
 ];
 
 export function PhcWorkspace() {
@@ -190,137 +214,166 @@ export function PhcWorkspace() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f9fb] text-[#18202a]">
-      <section className="border-b border-[#d8e1e6] bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-2 rounded-md bg-[#126b5d]/10 px-3 py-1 text-sm font-medium text-[#126b5d]">
-                  <BadgeCheck className="size-4" />
-                  Portfolio prototype
-                </span>
-                <span className="inline-flex items-center gap-2 rounded-md bg-[#f0b429]/15 px-3 py-1 text-sm font-medium text-[#785900]">
-                  <ShieldAlert className="size-4" />
-                  AI draft
-                </span>
-              </div>
-              <div>
-                <h1 className="text-3xl font-semibold tracking-normal text-[#101820] sm:text-4xl">
-                  PHC-AI
-                </h1>
-                <p className="mt-2 max-w-2xl text-base leading-7 text-[#536575]">
-                  Personal Health Checkup AI for understanding post-visit notes,
-                  reports, images, and instructions after real care.
-                </p>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[520px]">
-              {modelStats.map(([label, value]) => (
-                <div
-                  className="rounded-lg border border-[#d8e1e6] bg-[#f7f9fb] p-3"
-                  key={label}
-                >
-                  <p className="text-xs font-medium text-[#6b7c8b]">{label}</p>
-                  <p className="mt-1 text-sm font-semibold text-[#18202a]">
-                    {value}
-                  </p>
-                </div>
+    <Box bg="#f6faf9" mih="100vh">
+      <Box
+        bg="linear-gradient(135deg, #e7f6f2 0%, #f7fbff 52%, #fff8ec 100%)"
+        style={{ borderBottom: "1px solid #dbe7e4" }}
+      >
+        <Container size="xl" py={{ base: 28, md: 42 }}>
+          <Grid align="center" gap="xl">
+            <Grid.Col span={{ base: 12, md: 7 }}>
+              <Stack gap="md">
+                <Group gap="xs">
+                  <Badge color="teal" variant="light" leftSection={<BadgeCheck size={14} />}>
+                    Portfolio prototype
+                  </Badge>
+                  <Badge color="yellow" variant="light" leftSection={<ShieldAlert size={14} />}>
+                    AI draft
+                  </Badge>
+                </Group>
+
+                <Stack gap={6}>
+                  <Title order={1} size="h1" c="#10201c">
+                    PHC-AI
+                  </Title>
+                  <Text size="xl" fw={600} c="#1d3a35">
+                    Understand your checkup after the visit.
+                  </Text>
+                  <Text size="md" maw={680} c="dimmed" lh={1.7}>
+                    Upload or paste synthetic reports, visit notes, images, or
+                    doctor instructions. PHC-AI turns them into plain-language
+                    summaries and questions for your care team.
+                  </Text>
+                </Stack>
+
+                <Alert color="yellow" radius="md" icon={<ShieldAlert size={18} />}>
+                  PHC-AI does not diagnose, prescribe, or replace licensed
+                  medical care. Use synthetic/demo data only.
+                </Alert>
+              </Stack>
+            </Grid.Col>
+
+            <Grid.Col span={{ base: 12, md: 5 }}>
+              <Paper radius="lg" p="lg" shadow="sm" withBorder bg="white">
+                <Stack gap="md">
+                  <Group justify="space-between" align="flex-start">
+                    <div>
+                      <Text fw={700}>Your post-visit packet</Text>
+                      <Text size="sm" c="dimmed">
+                        Synthetic wellness follow-up
+                      </Text>
+                    </div>
+                    <ThemeIcon color="teal" variant="light" size="lg">
+                      <HeartPulse size={22} />
+                    </ThemeIcon>
+                  </Group>
+                  <SimpleGrid cols={2}>
+                    {visitFacts.map(([label, value, helper]) => (
+                      <Paper key={label} radius="md" p="sm" bg="#f3f8f7">
+                        <Text size="xs" c="dimmed">
+                          {label}
+                        </Text>
+                        <Text fw={700}>{value}</Text>
+                        <Text size="xs" c="teal.8">
+                          {helper}
+                        </Text>
+                      </Paper>
+                    ))}
+                  </SimpleGrid>
+                </Stack>
+              </Paper>
+            </Grid.Col>
+          </Grid>
+        </Container>
+      </Box>
+
+      <Container size="xl" py="lg">
+        <Grid gap="lg">
+          <Grid.Col span={{ base: 12, lg: 4 }}>
+            <Stack gap="md">
+              <Card radius="lg" shadow="sm" withBorder>
+                <Stack gap="md">
+                  <Group>
+                    <ThemeIcon color="teal" variant="light" size="lg">
+                      <Brain size={22} />
+                    </ThemeIcon>
+                    <div>
+                      <Text fw={700}>Ask about your visit</Text>
+                      <Text size="sm" c="dimmed">
+                        Plain language, follow-up focused
+                      </Text>
+                    </div>
+                  </Group>
+
+                  <Textarea
+                    minRows={6}
+                    value={input}
+                    onChange={(event) => setInput(event.currentTarget.value)}
+                    placeholder="Paste visit note or ask a question..."
+                  />
+
+                  <Button
+                    color="teal"
+                    leftSection={<Send size={16} />}
+                    loading={status === "running"}
+                    onClick={runDemo}
+                  >
+                    Run demo analysis
+                  </Button>
+
+                  <Text size="xs" c="dimmed" lh={1.5}>
+                    Prompt: {activePrompt.slice(0, 130)}
+                    {activePrompt.length > 130 ? "..." : ""}
+                  </Text>
+                </Stack>
+              </Card>
+
+              <Card radius="lg" shadow="sm" withBorder>
+                <Stack gap="sm">
+                  <Group>
+                    <ThemeIcon color="blue" variant="light">
+                      <Pill size={18} />
+                    </ThemeIcon>
+                    <Text fw={700}>What PHC-AI helps with</Text>
+                  </Group>
+                  <List size="sm" spacing="xs" c="dimmed">
+                    <List.Item>Explain doctor notes after appointment</List.Item>
+                    <List.Item>Turn instructions into checklists</List.Item>
+                    <List.Item>Prepare questions for next visit</List.Item>
+                    <List.Item>Organize imaging demos by model</List.Item>
+                  </List>
+                </Stack>
+              </Card>
+            </Stack>
+          </Grid.Col>
+
+          <Grid.Col span={{ base: 12, lg: 8 }}>
+            <Tabs defaultValue="visit" variant="pills" radius="md" color="teal">
+              <Tabs.List grow>
+                {workflows.map((workflow) => {
+                  const Icon = workflow.icon;
+                  return (
+                    <Tabs.Tab
+                      key={workflow.id}
+                      value={workflow.id}
+                      leftSection={<Icon size={16} />}
+                    >
+                      {workflow.shortLabel}
+                    </Tabs.Tab>
+                  );
+                })}
+              </Tabs.List>
+
+              {workflows.map((workflow) => (
+                <Tabs.Panel key={workflow.id} value={workflow.id} pt="md">
+                  <WorkflowPanel status={status} workflow={workflow} />
+                </Tabs.Panel>
               ))}
-            </div>
-          </div>
-          <div className="rounded-lg border border-[#f0b429]/40 bg-[#fff8e6] p-4 text-sm leading-6 text-[#604600]">
-            AI-generated explanations may be incomplete or incorrect. PHC-AI
-            does not diagnose, prescribe, or replace licensed medical care.
-            Follow clinician instructions and seek urgent help for urgent
-            symptoms.
-          </div>
-        </div>
-      </section>
-
-      <section className="mx-auto grid max-w-7xl gap-4 px-4 py-5 sm:px-6 lg:grid-cols-[360px_1fr] lg:px-8">
-        <aside className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Pill className="size-5 text-[#126b5d]" />
-                Demo Record
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-[#536575]">
-              <div>
-                <p className="font-medium text-[#18202a]">
-                  Synthetic patient visit
-                </p>
-                <p>Hypertension follow-up, basic labs, medication review.</p>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-md bg-[#edf3f6] p-3">
-                  <p className="text-xs text-[#6b7c8b]">BP</p>
-                  <p className="font-semibold text-[#18202a]">142/88</p>
-                </div>
-                <div className="rounded-md bg-[#edf3f6] p-3">
-                  <p className="text-xs text-[#6b7c8b]">A1C</p>
-                  <p className="font-semibold text-[#18202a]">5.8%</p>
-                </div>
-                <div className="rounded-md bg-[#edf3f6] p-3">
-                  <p className="text-xs text-[#6b7c8b]">eGFR</p>
-                  <p className="font-semibold text-[#18202a]">92</p>
-                </div>
-                <div className="rounded-md bg-[#edf3f6] p-3">
-                  <p className="text-xs text-[#6b7c8b]">Status</p>
-                  <p className="font-semibold text-[#18202a]">Stable</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Brain className="size-5 text-[#126b5d]" />
-                Ask PHC-AI
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Textarea
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                aria-label="Prompt"
-              />
-              <Button className="w-full" onClick={runDemo}>
-                <Send className="size-4" />
-                Run demo analysis
-              </Button>
-              <p className="text-xs leading-5 text-[#6b7c8b]">
-                Current prompt: {activePrompt.slice(0, 110)}
-                {activePrompt.length > 110 ? "..." : ""}
-              </p>
-            </CardContent>
-          </Card>
-        </aside>
-
-        <Tabs defaultValue="visit" className="min-w-0">
-          <TabsList>
-            {workflows.map((workflow) => {
-              const Icon = workflow.icon;
-              return (
-                <TabsTrigger key={workflow.id} value={workflow.id}>
-                  <Icon className="size-4" />
-                  {workflow.label}
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-
-          {workflows.map((workflow) => (
-            <TabsContent key={workflow.id} value={workflow.id}>
-              <WorkflowPanel status={status} workflow={workflow} />
-            </TabsContent>
-          ))}
-        </Tabs>
-      </section>
-    </main>
+            </Tabs>
+          </Grid.Col>
+        </Grid>
+      </Container>
+    </Box>
   );
 }
 
@@ -331,76 +384,100 @@ function WorkflowPanel({
   workflow: Workflow;
   status: "idle" | "running" | "ready";
 }) {
+  const Icon = workflow.icon;
+
   return (
-    <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <CardTitle>{workflow.label}</CardTitle>
-              <p className="mt-1 text-sm text-[#536575]">
-                {workflow.reviewed}
-              </p>
-            </div>
-            <span className="inline-flex w-fit items-center gap-2 rounded-md bg-[#edf3f6] px-3 py-1 text-xs font-medium text-[#536575]">
-              <Sparkles className="size-3.5" />
-              {workflow.model}
-            </span>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-lg border border-[#d8e1e6] bg-[#f7f9fb] p-4">
-            <p className="text-xs font-semibold uppercase tracking-normal text-[#6b7c8b]">
-              Task
-            </p>
-            <p className="mt-1 text-sm font-medium text-[#18202a]">
-              {workflow.task}
-            </p>
-          </div>
+    <Grid gap="md">
+      <Grid.Col span={{ base: 12, xl: 8 }}>
+        <Card radius="lg" shadow="sm" withBorder>
+          <Stack gap="md">
+            <Group justify="space-between" align="flex-start">
+              <Group align="flex-start">
+                <ThemeIcon color="teal" variant="light" size="xl">
+                  <Icon size={24} />
+                </ThemeIcon>
+                <div>
+                  <Title order={2} size="h3">
+                    {workflow.label}
+                  </Title>
+                  <Text size="sm" c="dimmed">
+                    {workflow.reviewed}
+                  </Text>
+                </div>
+              </Group>
+              <Badge color="gray" variant="light">
+                {workflow.task}
+              </Badge>
+            </Group>
 
-          <section>
-            <h3 className="text-sm font-semibold text-[#18202a]">
-              Plain-language explanation
-            </h3>
-            <div className="mt-3 space-y-2">
+            <Paper radius="md" p="md" bg="#f7fbfa" withBorder>
+              <Group justify="space-between" mb={8}>
+                <Text size="sm" fw={700}>
+                  Readiness signal
+                </Text>
+                <Text size="sm" c="teal.8" fw={700}>
+                  {workflow.score}%
+                </Text>
+              </Group>
+              <Progress value={workflow.score} color="teal" radius="xl" />
+              <Text size="xs" c="dimmed" mt={8}>
+                Demo score for completeness of synthetic packet.
+              </Text>
+            </Paper>
+
+            <Divider />
+
+            <Stack gap="sm">
+              <Text fw={700}>Plain-language explanation</Text>
               {workflow.output.map((item) => (
-                <p
-                  className="rounded-md border border-[#d8e1e6] bg-white p-3 text-sm leading-6 text-[#354554]"
-                  key={item}
-                >
-                  {status === "running" ? "Preparing model response..." : item}
-                </p>
+                <Paper key={item} radius="md" p="md" bg="#fbfefd" withBorder>
+                  <Group align="flex-start" gap="sm">
+                    <ThemeIcon color="teal" variant="light" size="sm">
+                      <ClipboardCheck size={14} />
+                    </ThemeIcon>
+                    <Text size="sm" lh={1.6} c="#31443f">
+                      {status === "running" ? "Preparing model response..." : item}
+                    </Text>
+                  </Group>
+                </Paper>
               ))}
-            </div>
-          </section>
-        </CardContent>
-      </Card>
-
-      <div className="space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Ask your clinician</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2 text-sm leading-6 text-[#354554]">
-              {workflow.questions.map((question) => (
-                <li className="rounded-md bg-[#edf3f6] p-3" key={question}>
-                  {question}
-                </li>
-              ))}
-            </ul>
-          </CardContent>
+            </Stack>
+          </Stack>
         </Card>
+      </Grid.Col>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Limitations</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm leading-6 text-[#536575]">
-            {workflow.limits}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+      <Grid.Col span={{ base: 12, xl: 4 }}>
+        <Stack gap="md">
+          <Card radius="lg" shadow="sm" withBorder>
+            <Stack gap="sm">
+              <Group>
+                <ThemeIcon color="yellow" variant="light">
+                  <Sparkles size={18} />
+                </ThemeIcon>
+                <Text fw={700}>Model</Text>
+              </Group>
+              <Text size="sm" c="dimmed">
+                {workflow.model}
+              </Text>
+            </Stack>
+          </Card>
+
+          <Card radius="lg" shadow="sm" withBorder>
+            <Stack gap="sm">
+              <Text fw={700}>Ask your clinician</Text>
+              <List size="sm" spacing="sm" c="#31443f">
+                {workflow.questions.map((question) => (
+                  <List.Item key={question}>{question}</List.Item>
+                ))}
+              </List>
+            </Stack>
+          </Card>
+
+          <Alert color="gray" radius="md" icon={<ShieldAlert size={18} />}>
+            <Text size="sm">{workflow.limits}</Text>
+          </Alert>
+        </Stack>
+      </Grid.Col>
+    </Grid>
   );
 }
