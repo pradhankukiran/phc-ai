@@ -24,7 +24,6 @@ import {
 import type { LucideIcon } from "lucide-react";
 import {
   AudioLines,
-  BadgeCheck,
   Bone,
   Brain,
   ClipboardCheck,
@@ -35,7 +34,7 @@ import {
   Search,
   Send,
   ShieldAlert,
-  Sparkles,
+  Stethoscope,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { infer, type InferResponse, type PhcModel, type PhcTask } from "@/lib/modalInfer";
@@ -250,15 +249,6 @@ export function PhcWorkspace() {
           <Grid align="center" gap="xl">
             <Grid.Col span={{ base: 12, md: 7 }}>
               <Stack gap="md">
-                <Group gap="xs">
-                  <Badge color="teal" variant="light" leftSection={<BadgeCheck size={14} />}>
-                    Portfolio prototype
-                  </Badge>
-                  <Badge color="yellow" variant="light" leftSection={<ShieldAlert size={14} />}>
-                    Real model endpoint
-                  </Badge>
-                </Group>
-
                 <Stack gap={6}>
                   <Title order={1} size="h1" c="#10201c">
                     PHC-AI
@@ -267,14 +257,14 @@ export function PhcWorkspace() {
                     Understand your checkup after the visit.
                   </Text>
                   <Text size="md" maw={680} c="dimmed" lh={1.7}>
-                    Connects to a Modal GPU endpoint running MedGemma, MedASR,
-                    MedSigLIP, CXR Foundation, Derm Foundation, and Path Foundation.
+                    Ask questions about your visit notes, reports, images, and
+                    recorded instructions in one place.
                   </Text>
                 </Stack>
 
                 <Alert color="yellow" radius="md" icon={<ShieldAlert size={18} />}>
-                  Portfolio build. Do not upload PHI unless you control compliant
-                  deployment, storage, logging, and data handling.
+                  PHC-AI helps explain care documents. It does not diagnose,
+                  prescribe, or replace your clinician.
                 </Alert>
               </Stack>
             </Grid.Col>
@@ -284,9 +274,9 @@ export function PhcWorkspace() {
                 <Stack gap="md">
                   <Group justify="space-between" align="flex-start">
                     <div>
-                      <Text fw={700}>Single Modal endpoint</Text>
+                      <Text fw={700}>Your health packet</Text>
                       <Text size="sm" c="dimmed">
-                        Lazy loads one model per request
+                        Notes, reports, images, and instructions
                       </Text>
                     </div>
                     <ThemeIcon color="teal" variant="light" size="lg">
@@ -294,10 +284,10 @@ export function PhcWorkspace() {
                     </ThemeIcon>
                   </Group>
                   <List size="sm" spacing="xs" c="dimmed">
-                    <List.Item>`/infer` dispatches by model param</List.Item>
-                    <List.Item>HF weights cached on Modal Volume</List.Item>
-                    <List.Item>MAX_LOADED_MODELS defaults to 1</List.Item>
-                    <List.Item>No synthetic response fallback</List.Item>
+                    <List.Item>Summarize doctor notes in plain language</List.Item>
+                    <List.Item>Transcribe visit recordings</List.Item>
+                    <List.Item>Review images and reports</List.Item>
+                    <List.Item>Prepare questions for follow-up</List.Item>
                   </List>
                 </Stack>
               </Paper>
@@ -413,7 +403,7 @@ function InputPanel({
           disabled={!canRun}
           onClick={onRun}
         >
-          Run real inference
+          Analyze
         </Button>
       </Stack>
     </Card>
@@ -464,8 +454,9 @@ function OutputPanel({
             <Divider />
 
             {status === "running" && (
-              <Alert color="teal" icon={<Sparkles size={18} />}>
-                Calling Modal. First call may download and load model weights.
+              <Alert color="teal" icon={<Stethoscope size={18} />}>
+                Analyzing your information. First analysis for a section can take
+                a few minutes.
               </Alert>
             )}
 
@@ -478,8 +469,7 @@ function OutputPanel({
             {!result && status === "idle" && !error && (
               <Paper radius="md" p="lg" bg="#f7fbfa" withBorder>
                 <Text c="dimmed">
-                  Add required input, then run inference. Output from Modal will
-                  appear here.
+                  Add required input, then analyze. Results will appear here.
                 </Text>
               </Paper>
             )}
@@ -515,25 +505,10 @@ function OutputPanel({
             <Stack gap="sm">
               <Group>
                 <ThemeIcon color="yellow" variant="light">
-                  <Sparkles size={18} />
+                  <Stethoscope size={18} />
                 </ThemeIcon>
-                <Text fw={700}>Runtime</Text>
+                <Text fw={700}>Ask your clinician</Text>
               </Group>
-              <Text size="sm" c="dimmed">
-                Cold start: {String(result?.cold_start ?? false)}
-              </Text>
-              <Text size="sm" c="dimmed">
-                Latency: {result?.latency_ms ? `${result.latency_ms}ms` : "pending"}
-              </Text>
-              <Text size="sm" c="dimmed">
-                Cached: {result?.meta?.cached_models?.join(", ") || "none"}
-              </Text>
-            </Stack>
-          </Card>
-
-          <Card radius="lg" shadow="sm" withBorder>
-            <Stack gap="sm">
-              <Text fw={700}>Ask your clinician</Text>
               <List size="sm" spacing="sm" c="#31443f">
                 {workflow.questions.map((question) => (
                   <List.Item key={question}>{question}</List.Item>
