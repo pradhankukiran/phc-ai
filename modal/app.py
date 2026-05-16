@@ -1,12 +1,18 @@
+import logging
 import os
 from time import perf_counter
 
 import modal
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from model_registry import ModelCache
 from schemas import InferMeta, InferRequest, InferResponse
+
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logger = logging.getLogger("phc-ai")
 
 
 app = modal.App(os.getenv("MODAL_APP_NAME", "phc-ai-health-companion"))
@@ -22,7 +28,6 @@ image = (
     .env(
         {
             "HF_HOME": "/models/huggingface",
-            "TRANSFORMERS_CACHE": "/models/huggingface",
             "MODEL_CACHE_DIR": "/models/huggingface",
             "TF_USE_LEGACY_KERAS": "1",
         }
@@ -68,37 +73,42 @@ class InferenceService:
         )
 
         @api.post("/infer", response_model=InferResponse)
-        async def infer(request: InferRequest) -> InferResponse:
+        async def infer(request: InferRequest):
             started = perf_counter()
             try:
                 output, cold = self.cache.infer(request)
-                latency_ms = int((perf_counter() - started) * 1000)
-                return InferResponse(
-                    model=request.model,
-                    task=request.task,
-                    status="ok",
-                    cold_start=cold,
-                    latency_ms=latency_ms,
-                    output=output,
-                    meta=InferMeta(
-                        cached_models=list(self.cache.loaded.keys()),
-                    ),
-                )
             except ValueError as error:
-                return InferResponse(
-                    model=request.model,
-                    task=request.task,
-                    status="error",
-                    code="UNSUPPORTED_TASK",
-                    message=str(error),
-                )
-            except Exception as error:
-                return InferResponse(
-                    model=request.model,
-                    task=request.task,
-                    status="error",
+                logger.warning("validation rejected request: %s", error)
+                return _error_response(request, status_code=400, code="UNSUPPORTED_TASK", message=str(error))
+            except Exception:
+                logger.exception("inference failed for model=%s task=%s", request.model, request.task)
+                return _error_response(
+                    request,
+                    status_code=500,
                     code="INFERENCE_FAILED",
-                    message=str(error),
+                    message="Inference failed. See server logs.",
                 )
 
+            latency_ms = int((perf_counter() - started) * 1000)
+            return InferResponse(
+                model=request.model,
+                task=request.task,
+                status="ok",
+                cold_start=cold,
+                latency_ms=latency_ms,
+                output=output,
+                meta=InferMeta(cached_models=list(self.cache.loaded.keys())),
+            )
+
         return api
+
+
+def _error_response(request: InferRequest, *, status_code: int, code: str, message: str) -> JSONResponse:
+    payload = InferResponse(
+        model=request.model,
+        task=request.task,
+        status="error",
+        code=code,
+        message=message,
+    )
+    return JSONResponse(status_code=status_code, content=payload.model_dump())

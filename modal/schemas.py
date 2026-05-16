@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 ModelId = Literal[
@@ -12,21 +12,30 @@ ModelId = Literal[
     "google/path-foundation",
 ]
 
-Task = Literal["chat", "asr", "image_embed", "classify", "similarity"]
+Task = Literal["chat", "asr", "image_embed", "classify"]
+
+
+MAX_PROMPT_CHARS = 32_000
+MAX_REPORT_CHARS = 64_000
+MAX_LABEL_CHARS = 256
+MAX_LABELS = 64
+MAX_MESSAGES = 32
+MAX_MESSAGE_CHARS = 16_000
+MAX_BASE64_CHARS = 14_000_000  # ~10MB binary after decode
 
 
 class ChatMessage(BaseModel):
-    role: Literal["user", "assistant"]
-    content: str
+    role: Literal["system", "user", "assistant"]
+    content: str = Field(max_length=MAX_MESSAGE_CHARS)
 
 
 class InferInputs(BaseModel):
-    prompt: str | None = None
-    text: str | None = None
-    messages: list[ChatMessage] | None = None
-    labels: list[str] | None = None
-    image_base64: str | None = None
-    audio_base64: str | None = None
+    prompt: str | None = Field(default=None, max_length=MAX_PROMPT_CHARS)
+    text: str | None = Field(default=None, max_length=MAX_REPORT_CHARS)
+    messages: list[ChatMessage] | None = Field(default=None, max_length=MAX_MESSAGES)
+    labels: list[str] | None = Field(default=None, max_length=MAX_LABELS)
+    image_base64: str | None = Field(default=None, max_length=MAX_BASE64_CHARS)
+    audio_base64: str | None = Field(default=None, max_length=MAX_BASE64_CHARS)
 
 
 class InferOptions(BaseModel):
@@ -38,6 +47,8 @@ class InferOptions(BaseModel):
 
 
 class InferRequest(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     model: ModelId
     task: Task
     inputs: InferInputs
@@ -58,6 +69,8 @@ class InferMeta(BaseModel):
 
 
 class InferResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     model: ModelId
     task: Task
     status: Literal["ok", "error"]

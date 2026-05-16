@@ -17,16 +17,10 @@ from schemas import InferOutput, InferRequest
 SUPPORTED_TASKS = {
     "google/medgemma-1.5-4b-it": {"chat"},
     "google/medasr": {"asr"},
-    "google/medsiglip-448": {"image_embed", "classify", "similarity"},
-    "google/cxr-foundation": {"image_embed", "similarity"},
-    "google/derm-foundation": {"image_embed", "similarity"},
-    "google/path-foundation": {"image_embed", "similarity"},
-}
-
-PYTORCH_MODELS = {
-    "google/medgemma-1.5-4b-it",
-    "google/medasr",
-    "google/medsiglip-448",
+    "google/medsiglip-448": {"image_embed", "classify"},
+    "google/cxr-foundation": {"image_embed"},
+    "google/derm-foundation": {"image_embed"},
+    "google/path-foundation": {"image_embed"},
 }
 
 KERAS_MODELS = {
@@ -56,7 +50,7 @@ class ModelCache:
         if request.task == "asr" and not request.inputs.audio_base64:
             raise ValueError("audio_base64 is required for task=asr.")
 
-        if request.task in {"image_embed", "classify", "similarity"}:
+        if request.task in {"image_embed", "classify"}:
             if request.model != "google/medsiglip-448" and not request.inputs.image_base64:
                 raise ValueError("image_base64 is required for this image model.")
             if request.model == "google/medsiglip-448" and not (
@@ -156,17 +150,23 @@ def run_medgemma(runtime: dict[str, Any], request: InferRequest) -> InferOutput:
     processor = runtime["processor"]
     model = runtime["model"]
     messages = build_medgemma_messages(request)
-    inputs = processor.apply_chat_template(
+    raw_inputs = processor.apply_chat_template(
         messages,
         add_generation_prompt=True,
         tokenize=True,
         return_dict=True,
         return_tensors="pt",
-    ).to(model.device, dtype=torch.bfloat16)
+    )
+    inputs = {
+        key: tensor.to(model.device, dtype=torch.bfloat16)
+        if torch.is_floating_point(tensor)
+        else tensor.to(model.device)
+        for key, tensor in raw_inputs.items()
+    }
 
     input_len = inputs["input_ids"].shape[-1]
     with torch.inference_mode():
-        generation_kwargs = {
+        generation_kwargs: dict[str, Any] = {
             "max_new_tokens": request.options.max_new_tokens,
             "do_sample": request.options.temperature > 0,
         }
@@ -179,45 +179,63 @@ def run_medgemma(runtime: dict[str, Any], request: InferRequest) -> InferOutput:
         generation[0][input_len:],
         skip_special_tokens=True,
     )
-    return InferOutput(text=sanitize_medgemma_text(decoded))
+    return InferOutput(text=decoded.strip())
+
+
+SYSTEM_INSTRUCTION = (
+    "Answer directly in patient-friendly language. Do not include hidden "
+    "reasoning. Do not diagnose or prescribe."
+)
 
 
 def build_medgemma_messages(request: InferRequest) -> list[dict[str, Any]]:
-    instruction = (
-        "Answer directly in patient-friendly language. Do not include hidden "
-        "reasoning. Do not diagnose or prescribe."
-    )
     report_context = request.inputs.text or ""
     image = decode_image(request.inputs.image_base64) if request.inputs.image_base64 else None
 
-    if request.inputs.messages:
-        transcript = "\n".join(
-            f"{message.role.title()}: {message.content}"
-            for message in request.inputs.messages
-        )
-        prompt_parts = [
-            instruction,
-            "Conversation so far:",
-            transcript,
-            "Answer the latest user message directly.",
-        ]
-        if report_context:
-            prompt_parts.append(f"Reference health document:\n{report_context}")
-        content = [{"type": "text", "text": "\n\n".join(prompt_parts)}]
-        if image:
-            content.insert(0, {"type": "image", "image": image})
-        return [{"role": "user", "content": content}]
-
-    prompt_parts = [
-        instruction,
-        request.inputs.prompt or "Explain the provided health document in plain language.",
-        report_context,
+    messages: list[dict[str, Any]] = [
+        {
+            "role": "system",
+            "content": [{"type": "text", "text": SYSTEM_INSTRUCTION}],
+        }
     ]
-    prompt = "\n\n".join(part for part in prompt_parts if part.strip())
-    content = [{"type": "text", "text": prompt}]
-    if image:
-        content.insert(0, {"type": "image", "image": image})
-    return [{"role": "user", "content": content}]
+
+    if request.inputs.messages:
+        for index, message in enumerate(request.inputs.messages):
+            if message.role == "system":
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": [{"type": "text", "text": message.content}],
+                    }
+                )
+                continue
+            content: list[dict[str, Any]] = []
+            is_last_user = (
+                message.role == "user"
+                and index == len(request.inputs.messages) - 1
+            )
+            if is_last_user and image is not None:
+                content.append({"type": "image", "image": image})
+            if is_last_user and report_context:
+                content.append(
+                    {
+                        "type": "text",
+                        "text": f"Reference health document:\n{report_context}",
+                    }
+                )
+            content.append({"type": "text", "text": message.content})
+            messages.append({"role": message.role, "content": content})
+        return messages
+
+    user_content: list[dict[str, Any]] = []
+    if image is not None:
+        user_content.append({"type": "image", "image": image})
+    prompt_text = request.inputs.prompt or "Explain the provided health document in plain language."
+    if report_context:
+        prompt_text = f"{prompt_text}\n\nReference health document:\n{report_context}"
+    user_content.append({"type": "text", "text": prompt_text})
+    messages.append({"role": "user", "content": user_content})
+    return messages
 
 
 def run_medasr(runtime: dict[str, Any], request: InferRequest) -> InferOutput:
@@ -321,11 +339,9 @@ def run_path(runtime: dict[str, Any], request: InferRequest) -> InferOutput:
 
 def normalize_labels(request: InferRequest) -> list[str]:
     if request.inputs.labels:
-        return [label.strip() for label in request.inputs.labels if label.strip()]
+        return [label.strip() for label in request.inputs.labels if label.strip()][:64]
     text = request.inputs.text or request.inputs.prompt or ""
     labels = [line.strip(" -") for line in text.splitlines() if line.strip()]
-    if request.task in {"classify", "similarity"} and labels:
-        return labels
     return labels[:64]
 
 
@@ -364,22 +380,3 @@ def trim_embedding(value: Any, request: InferRequest) -> list[float]:
     return [float(item) for item in array[:limit]]
 
 
-def sanitize_medgemma_text(value: str) -> str:
-    text = value.strip()
-    for marker in ("<unused95>model", "<unused95>", "\nmodel\n", "\nanswer\n"):
-        if marker in text:
-            text = text.split(marker, 1)[1].strip()
-            break
-
-    if "<unused94>thought" in text or text.startswith("thought\n"):
-        return (
-            "The model returned internal reasoning without a final answer. "
-            "Retry with a larger response length."
-        )
-
-    lines = [
-        line
-        for line in text.splitlines()
-        if not line.strip().startswith("<unused")
-    ]
-    return "\n".join(lines).strip()
