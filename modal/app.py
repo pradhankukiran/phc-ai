@@ -56,10 +56,7 @@ class InferenceService:
         api = FastAPI(title="PHC-AI Modal Inference")
         origins = [
             origin.strip()
-            for origin in os.getenv(
-                "ALLOWED_ORIGINS",
-                "http://localhost:3000",
-            ).split(",")
+            for origin in os.getenv("ALLOWED_ORIGINS", "*").split(",")
             if origin.strip()
         ]
         api.add_middleware(

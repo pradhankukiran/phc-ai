@@ -160,8 +160,13 @@ def run_medgemma(runtime: dict[str, Any], request: InferRequest) -> InferOutput:
     if request.inputs.image_base64:
         content.append({"type": "image", "image": decode_image(request.inputs.image_base64)})
 
-    prompt = request.inputs.prompt or request.inputs.text
-    if not prompt:
+    prompt_parts = [
+        "Answer directly in patient-friendly language. Do not include hidden reasoning.",
+        request.inputs.prompt or "",
+        request.inputs.text or "",
+    ]
+    prompt = "\n\n".join(part for part in prompt_parts if part.strip())
+    if not prompt.strip():
         prompt = "Explain the provided health document in plain language."
     content.append({"type": "text", "text": prompt})
 
@@ -176,19 +181,20 @@ def run_medgemma(runtime: dict[str, Any], request: InferRequest) -> InferOutput:
 
     input_len = inputs["input_ids"].shape[-1]
     with torch.inference_mode():
-        generation = model.generate(
-            **inputs,
-            max_new_tokens=request.options.max_new_tokens,
-            do_sample=request.options.temperature > 0,
-            temperature=request.options.temperature,
-            top_p=request.options.top_p,
-        )
+        generation_kwargs = {
+            "max_new_tokens": request.options.max_new_tokens,
+            "do_sample": request.options.temperature > 0,
+        }
+        if request.options.temperature > 0:
+            generation_kwargs["temperature"] = request.options.temperature
+            generation_kwargs["top_p"] = request.options.top_p
+        generation = model.generate(**inputs, **generation_kwargs)
 
     decoded = processor.decode(
         generation[0][input_len:],
         skip_special_tokens=True,
     )
-    return InferOutput(text=decoded.strip())
+    return InferOutput(text=sanitize_medgemma_text(decoded))
 
 
 def run_medasr(runtime: dict[str, Any], request: InferRequest) -> InferOutput:
@@ -333,3 +339,24 @@ def trim_embedding(value: Any, request: InferRequest) -> list[float]:
     array = np.asarray(value).reshape(-1)
     limit = request.options.embedding_limit
     return [float(item) for item in array[:limit]]
+
+
+def sanitize_medgemma_text(value: str) -> str:
+    text = value.strip()
+    for marker in ("<unused95>model", "<unused95>", "\nmodel\n", "\nanswer\n"):
+        if marker in text:
+            text = text.split(marker, 1)[1].strip()
+            break
+
+    if "<unused94>thought" in text or text.startswith("thought\n"):
+        return (
+            "The model returned internal reasoning without a final answer. "
+            "Retry with a larger response length."
+        )
+
+    lines = [
+        line
+        for line in text.splitlines()
+        if not line.strip().startswith("<unused")
+    ]
+    return "\n".join(lines).strip()
