@@ -1,36 +1,68 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PHC-AI
 
-## Getting Started
+Personal Health Checkup AI portfolio prototype.
 
-First, run the development server:
+PHC-AI explains synthetic post-visit materials after a real clinic or hospital
+visit: notes, reports, instructions, images, and audio. It is not for diagnosis,
+prescribing, or clinical use.
+
+## Stack
+
+- Next.js App Router
+- TypeScript
+- Tailwind CSS
+- shadcn-style UI primitives
+- lucide-react icons
+- Modal FastAPI backend scaffold
+- Single `/infer` endpoint
+- Vercel frontend deploy target
+
+## Model Plan
+
+| Tab | Model | Task |
+| --- | --- | --- |
+| Visit Notes | `google/medgemma-1.5-4b-it` | `chat` |
+| Conversation | `google/medasr` | `asr` |
+| Image Match | `google/medsiglip-448` | `image_embed` |
+| Chest X-ray | `google/cxr-foundation` | `image_embed` |
+| Skin | `google/derm-foundation` | `image_embed` |
+| Pathology | `google/path-foundation` | `image_embed` |
+
+## Local Frontend
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Modal Backend
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+modal secret create phc-ai-hf HF_TOKEN=hf_...
+modal deploy modal/app.py
+```
 
-## Learn More
+Set frontend env:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+NEXT_PUBLIC_MODAL_INFER_URL=https://your-workspace--phc-ai-medical-models-infer.modal.run/infer
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Default backend is demo-safe:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+PHC_AI_DEMO_MODE=1
+MAX_LOADED_MODELS=1
+MODAL_GPU=L40S
+```
 
-## Deploy on Vercel
+Real model adapters belong in `modal/model_registry.py`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Safety Scope
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Synthetic/demo data only
+- No PHI upload
+- AI draft copy shown in UI
+- No diagnosis, prescribing, or emergency guidance
