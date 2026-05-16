@@ -35,7 +35,7 @@ export function TabsList({
   return (
     <div
       className={cn(
-        "flex gap-1 overflow-x-auto rounded-lg border border-[#d8e1e6] bg-white p-1",
+        "flex gap-1 overflow-x-auto rounded-none border border-[#d8e1e6] bg-white p-1",
         className,
       )}
       role="tablist"
@@ -65,7 +65,7 @@ export function TabsTrigger({
     <button
       aria-selected={active}
       className={cn(
-        "flex min-w-max items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-[#536575] transition-colors",
+        "flex min-w-max items-center gap-2 rounded-none px-3 py-2 text-sm font-medium text-[#536575] transition-colors",
         active && "bg-[#126b5d] text-white shadow-sm",
         !active && "hover:bg-[#edf3f6] hover:text-[#18202a]",
         className,

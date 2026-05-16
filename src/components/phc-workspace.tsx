@@ -262,7 +262,7 @@ export function PhcWorkspace() {
                   </Text>
                 </Stack>
 
-                <Alert color="yellow" radius="md" icon={<ShieldAlert size={18} />}>
+                <Alert color="yellow" icon={<ShieldAlert size={18} />}>
                   PHC-AI helps explain care documents. It does not diagnose,
                   prescribe, or replace your clinician.
                 </Alert>
@@ -270,7 +270,7 @@ export function PhcWorkspace() {
             </Grid.Col>
 
             <Grid.Col span={{ base: 12, md: 5 }}>
-              <Paper radius="lg" p="lg" shadow="sm" withBorder bg="white">
+              <Paper p="lg" shadow="sm" withBorder bg="white">
                 <Stack gap="md">
                   <Group justify="space-between" align="flex-start">
                     <div>
@@ -297,7 +297,7 @@ export function PhcWorkspace() {
       </Box>
 
       <Container size="xl" py="lg">
-        <Tabs value={active} onChange={switchTab} variant="pills" radius="md" color="teal">
+        <Tabs value={active} onChange={switchTab} variant="pills" color="teal">
           <Tabs.List grow>
             {workflows.map((item) => {
               const Icon = item.icon;
@@ -349,7 +349,7 @@ function InputPanel({
   const needsFile = workflow.accepts !== "text";
 
   return (
-    <Card radius="lg" shadow="sm" withBorder>
+    <Card shadow="sm" withBorder>
       <Stack gap="md">
         <Group>
           <ThemeIcon color="teal" variant="light" size="lg">
@@ -430,7 +430,7 @@ function OutputPanel({
   return (
     <Grid gap="md">
       <Grid.Col span={{ base: 12, xl: 8 }}>
-        <Card radius="lg" shadow="sm" withBorder>
+        <Card shadow="sm" withBorder>
           <Stack gap="md">
             <Group justify="space-between" align="flex-start">
               <Group align="flex-start">
@@ -467,7 +467,7 @@ function OutputPanel({
             )}
 
             {!result && status === "idle" && !error && (
-              <Paper radius="md" p="lg" bg="#f7fbfa" withBorder>
+              <Paper p="lg" bg="#f7fbfa" withBorder>
                 <Text c="dimmed">
                   Add required input, then analyze. Results will appear here.
                 </Text>
@@ -475,7 +475,7 @@ function OutputPanel({
             )}
 
             {outputText && (
-              <Paper radius="md" p="md" bg="#fbfefd" withBorder>
+              <Paper p="md" bg="#fbfefd" withBorder>
                 <Group align="flex-start" gap="sm">
                   <ThemeIcon color="teal" variant="light" size="sm">
                     <ClipboardCheck size={14} />
@@ -501,7 +501,7 @@ function OutputPanel({
 
       <Grid.Col span={{ base: 12, xl: 4 }}>
         <Stack gap="md">
-          <Card radius="lg" shadow="sm" withBorder>
+          <Card shadow="sm" withBorder>
             <Stack gap="sm">
               <Group>
                 <ThemeIcon color="yellow" variant="light">
@@ -517,7 +517,7 @@ function OutputPanel({
             </Stack>
           </Card>
 
-          <Alert color="gray" radius="md" icon={<ShieldAlert size={18} />}>
+          <Alert color="gray" icon={<ShieldAlert size={18} />}>
             <Text size="sm">
               Outputs explain or embed provided material. They are not diagnosis,
               prescriptions, or emergency guidance.

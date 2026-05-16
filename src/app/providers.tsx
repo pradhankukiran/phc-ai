@@ -4,7 +4,7 @@ import { MantineProvider, createTheme } from "@mantine/core";
 
 const theme = createTheme({
   primaryColor: "teal",
-  defaultRadius: "md",
+  defaultRadius: 0,
   fontFamily: "var(--font-geist-sans), Arial, sans-serif",
 });
 
