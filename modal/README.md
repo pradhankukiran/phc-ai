@@ -3,7 +3,7 @@
 Single GPU, single `/infer` endpoint with lazy model loading:
 
 ```bash
-modal secret create phc-ai-hf HF_TOKEN=hf_...
+modal secret create phc-ai-hai-def-hf HF_TOKEN=hf_...
 modal deploy modal/app.py
 ```
 
@@ -12,6 +12,9 @@ Environment:
 ```bash
 MAX_LOADED_MODELS=1
 MODAL_GPU=L40S
+MODAL_APP_NAME=phc-ai-health-companion
+MODAL_VOLUME_NAME=phc-ai-hai-def-cache
+MODAL_HF_SECRET_NAME=phc-ai-hai-def-hf
 ALLOWED_ORIGINS=http://localhost:3000,https://your-domain.vercel.app
 ```
 

@@ -9,9 +9,9 @@ from model_registry import ModelCache
 from schemas import InferMeta, InferRequest, InferResponse
 
 
-app = modal.App(os.getenv("MODAL_APP_NAME", "phc-ai-medical-models"))
+app = modal.App(os.getenv("MODAL_APP_NAME", "phc-ai-health-companion"))
 volume = modal.Volume.from_name(
-    os.getenv("MODAL_VOLUME_NAME", "phc-ai-model-cache"),
+    os.getenv("MODAL_VOLUME_NAME", "phc-ai-hai-def-cache"),
     create_if_missing=True,
 )
 
@@ -27,6 +27,8 @@ image = (
             "TF_USE_LEGACY_KERAS": "1",
         }
     )
+    .add_local_file("modal/model_registry.py", "/root/model_registry.py")
+    .add_local_file("modal/schemas.py", "/root/schemas.py")
 )
 
 
@@ -37,7 +39,12 @@ image = (
     scaledown_window=900,
     max_containers=1,
     volumes={"/models": volume},
-    secrets=[modal.Secret.from_name("phc-ai-hf", required_keys=["HF_TOKEN"])],
+    secrets=[
+        modal.Secret.from_name(
+            os.getenv("MODAL_HF_SECRET_NAME", "phc-ai-hai-def-hf"),
+            required_keys=["HF_TOKEN"],
+        )
+    ],
 )
 class InferenceService:
     @modal.enter()
