@@ -1,6 +1,6 @@
 # PHC-AI
 
-Personal Health Checkup AI portfolio prototype.
+Personal Health Clinic AI portfolio prototype.
 
 PHC-AI explains post-visit materials after a clinic or hospital visit: notes,
 reports, instructions, images, and audio. It is not for diagnosis,
@@ -49,15 +49,17 @@ Routes:
 ## Modal Backend
 
 ```bash
-modal secret create phc-ai-hf HF_TOKEN=hf_...
+modal secret create phc-ai-hai-def-hf HF_TOKEN=hf_...
 modal deploy modal/app.py
 ```
 
-Set frontend env:
+Copy `.env.example` to `.env.local` and set:
 
 ```bash
-NEXT_PUBLIC_MODAL_INFER_URL=https://your-workspace--phc-ai-medical-models-infer.modal.run/infer
+NEXT_PUBLIC_MODAL_INFER_URL=https://your-workspace--phc-ai-health-companion-inferenceservice-fastapi-app.modal.run/infer
 ```
+
+See `modal/README.md` for the full set of Modal env vars.
 
 Backend runtime:
 
