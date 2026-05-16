@@ -1,38 +1,44 @@
 "use client";
 
 import {
-  ActionIcon,
-  Alert,
-  Box,
-  Button,
-  Container,
-  Group,
-  Loader,
-  Stack,
-  Text,
-  Textarea,
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+import {
+  Message,
+  MessageAction,
+  MessageActions,
+  MessageContent,
+  MessageResponse,
+} from "@/components/ai-elements/message";
+import {
+  PromptInput,
+  PromptInputBody,
+  PromptInputFooter,
+  PromptInputSubmit,
+  PromptInputTextarea,
+  PromptInputTools,
+} from "@/components/ai-elements/prompt-input";
+import {
+  Suggestion,
+  Suggestions,
+} from "@/components/ai-elements/suggestion";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
   Tooltip,
-} from "@mantine/core";
-import {
-  Check,
-  Copy,
-  Eraser,
-  Send,
-  ShieldAlert,
-  Sparkles,
-} from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type KeyboardEvent,
-} from "react";
-import { infer } from "@/lib/modalInfer";
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Check, Copy, Eraser, Sparkles } from "lucide-react";
+import { useCallback, useState } from "react";
 import type { Workflow } from "@/lib/workflows";
+import { infer } from "@/lib/modalInfer";
 
 type ChatMessage = {
+  id: string;
   role: "user" | "assistant";
   content: string;
   createdAt: number;
@@ -40,262 +46,170 @@ type ChatMessage = {
 
 export function ChatWorkflow({ workflow }: { workflow: Workflow }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
-  const [status, setStatus] = useState<"idle" | "running">("idle");
+  const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [draft, setDraft] = useState("");
 
-  const scrollToBottom = useCallback(() => {
-    const node = scrollRef.current;
-    if (!node) return;
-    node.scrollTop = node.scrollHeight;
-  }, []);
+  const status = pending ? "submitted" : "ready";
 
-  useLayoutEffect(() => {
-    scrollToBottom();
-  }, [messages.length, status, scrollToBottom]);
+  const submit = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed || pending) return;
 
-  useEffect(() => {
-    textareaRef.current?.focus();
-  }, [workflow.route]);
+      const userMessage: ChatMessage = {
+        id: cryptoId(),
+        role: "user",
+        content: trimmed,
+        createdAt: Date.now(),
+      };
+      setError(null);
+      setPending(trimmed);
+      setMessages((prev) => [...prev, userMessage]);
 
-  const canSend = input.trim().length > 0 && status === "idle";
+      const requestMessages = [...messages, userMessage].map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
 
-  async function send() {
-    if (!canSend) return;
-    const trimmed = input.trim();
-    const userMessage: ChatMessage = {
-      role: "user",
-      content: trimmed,
-      createdAt: Date.now(),
-    };
+      try {
+        const response = await infer({
+          model: workflow.model,
+          task: workflow.task,
+          inputs: {
+            prompt: trimmed,
+            messages: requestMessages,
+          },
+          options: {
+            max_new_tokens: 768,
+            temperature: 0.2,
+            top_p: 0.9,
+          },
+        });
 
-    setStatus("running");
-    setError(null);
-    setInput("");
-    setMessages((prev) => [...prev, userMessage]);
-
-    const requestMessages = [...messages, userMessage].map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
-
-    try {
-      const response = await infer({
-        model: workflow.model,
-        task: workflow.task,
-        inputs: {
-          prompt: trimmed,
-          messages: requestMessages,
-        },
-        options: {
-          max_new_tokens: 768,
-          temperature: 0.2,
-          top_p: 0.9,
-        },
-      });
-
-      if (response.status === "error") {
-        setError(response.message ?? response.code ?? "Inference failed.");
+        if (response.status === "error") {
+          setError(response.message ?? response.code ?? "Inference failed.");
+          setMessages((prev) =>
+            prev.length > 0 && prev[prev.length - 1]?.id === userMessage.id
+              ? prev.slice(0, -1)
+              : prev,
+          );
+          setDraft(trimmed);
+        } else if (response.output?.text) {
+          const assistantText = response.output.text;
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: cryptoId(),
+              role: "assistant",
+              content: assistantText,
+              createdAt: Date.now(),
+            },
+          ]);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Inference failed.");
         setMessages((prev) =>
-          prev.length > 0 && prev[prev.length - 1] === userMessage
+          prev.length > 0 && prev[prev.length - 1]?.id === userMessage.id
             ? prev.slice(0, -1)
             : prev,
         );
-        setInput(trimmed);
-      } else if (response.output?.text) {
-        const assistantText = response.output.text;
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: assistantText,
-            createdAt: Date.now(),
-          },
-        ]);
+        setDraft(trimmed);
+      } finally {
+        setPending(null);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Inference failed.");
-      setMessages((prev) =>
-        prev.length > 0 && prev[prev.length - 1] === userMessage
-          ? prev.slice(0, -1)
-          : prev,
-      );
-      setInput(trimmed);
-    } finally {
-      setStatus("idle");
-    }
-  }
+    },
+    [messages, pending, workflow.model, workflow.task],
+  );
 
-  function handleKey(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-      event.preventDefault();
-      send();
-    }
-  }
-
-  function clearConversation() {
+  const clear = useCallback(() => {
     setMessages([]);
     setError(null);
-    setInput("");
-    textareaRef.current?.focus();
-  }
-
-  function fillStarter(text: string) {
-    setInput(text);
-    textareaRef.current?.focus();
-  }
+    setDraft("");
+  }, []);
 
   return (
-    <Box
-      style={{
-        height: "calc(100vh - var(--phc-header-height))",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <Box
-        ref={scrollRef}
-        style={{ flex: 1, overflowY: "auto" }}
-        aria-live="polite"
-        aria-atomic="false"
-      >
-        <Container size="md" py="xl">
-          {messages.length === 0 ? (
-            <EmptyState workflow={workflow} onPickStarter={fillStarter} />
+    <div className="flex h-full flex-col">
+      <Conversation>
+        <ConversationContent className="mx-auto w-full max-w-3xl">
+          {messages.length === 0 && !pending ? (
+            <EmptyState
+              workflow={workflow}
+              onPick={(text) => {
+                setDraft(text);
+              }}
+            />
           ) : (
-            <Stack gap="lg">
-              {messages.map((m, index) => (
-                <MessageBubble
-                  key={`${m.role}-${m.createdAt}-${index}`}
-                  message={m}
-                />
+            <>
+              {messages.map((m) => (
+                <ChatMessageItem key={m.id} message={m} />
               ))}
-              {status === "running" && <ThinkingBubble />}
-            </Stack>
+              {pending && <PendingBubble text={pending} />}
+            </>
           )}
-        </Container>
-      </Box>
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
 
-      <Box
-        style={{
-          background: "var(--phc-surface)",
-          borderTop: "1px solid var(--phc-border)",
-        }}
-      >
-        <Container size="md" py="sm">
+      <div className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+        <div className="mx-auto w-full max-w-3xl px-4 py-3">
           {error && (
-            <Alert
-              color="red"
-              icon={<ShieldAlert size={16} />}
-              mb="xs"
-              withCloseButton
-              onClose={() => setError(null)}
-            >
-              {error}
+            <Alert variant="destructive" className="mb-2">
+              <AlertTitle>Inference failed</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
-          <Group gap="xs" align="flex-end" wrap="nowrap">
-            <Textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.currentTarget.value)}
-              onKeyDown={handleKey}
-              placeholder="Ask about your visit notes, labs, or instructions..."
-              autosize
-              minRows={1}
-              maxRows={6}
-              disabled={status === "running"}
-              aria-label="Message"
-              style={{ flex: 1 }}
-            />
-            <Tooltip label="Clear conversation" disabled={messages.length === 0}>
-              <ActionIcon
-                size="lg"
-                variant="subtle"
-                color="gray"
-                onClick={clearConversation}
-                disabled={messages.length === 0 && !error && input.length === 0}
-                aria-label="Clear conversation"
-              >
-                <Eraser size={18} />
-              </ActionIcon>
-            </Tooltip>
-            <Button
-              color="teal"
-              leftSection={<Send size={14} />}
-              loading={status === "running"}
-              disabled={!canSend}
-              onClick={send}
-            >
-              Send
-            </Button>
-          </Group>
-          <Text size="xs" c="var(--phc-text-muted)" mt={6}>
-            Enter to send · Shift+Enter for newline · Not for diagnosis
-          </Text>
-        </Container>
-      </Box>
-    </Box>
-  );
-}
-
-function EmptyState({
-  workflow,
-  onPickStarter,
-}: {
-  workflow: Workflow;
-  onPickStarter: (text: string) => void;
-}) {
-  return (
-    <Stack gap="lg" align="center" pt={48}>
-      <Box
-        style={{
-          width: 56,
-          height: 56,
-          borderRadius: 999,
-          background: "var(--phc-bubble-user)",
-          display: "grid",
-          placeItems: "center",
-        }}
-      >
-        <Sparkles size={28} color="var(--phc-accent)" />
-      </Box>
-      <Stack gap={4} align="center" style={{ textAlign: "center" }}>
-        <Text fw={700} size="lg" c="var(--phc-text-strong)">
-          {workflow.label}
-        </Text>
-        <Text size="sm" c="var(--phc-text-muted)" maw={460}>
-          {workflow.help}
-        </Text>
-      </Stack>
-      <Stack gap="xs" w="100%" maw={520}>
-        {workflow.questions.map((question) => (
-          <button
-            key={question}
-            type="button"
-            onClick={() => onPickStarter(question)}
-            style={{
-              padding: "10px 14px",
-              textAlign: "left",
-              background: "var(--phc-surface)",
-              border: "1px solid var(--phc-border)",
-              color: "var(--phc-text)",
-              cursor: "pointer",
-              fontSize: 14,
-              fontFamily: "inherit",
+          <PromptInput
+            onSubmit={(message) => {
+              const text = message.text ?? "";
+              setDraft("");
+              return submit(text);
             }}
           >
-            {question}
-          </button>
-        ))}
-      </Stack>
-    </Stack>
+            <PromptInputBody>
+              <PromptInputTextarea
+                placeholder="Ask about your visit notes, labs, or instructions…"
+                value={draft}
+                onChange={(e) => setDraft(e.currentTarget.value)}
+                disabled={!!pending}
+              />
+              <PromptInputFooter>
+                <PromptInputTools>
+                  <Tooltip>
+                    <TooltipTrigger render={<span />}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={clear}
+                        disabled={
+                          messages.length === 0 && !error && draft.length === 0
+                        }
+                        aria-label="Clear conversation"
+                      >
+                        <Eraser className="size-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Clear conversation</TooltipContent>
+                  </Tooltip>
+                </PromptInputTools>
+                <PromptInputSubmit
+                  status={status}
+                  disabled={!draft.trim() || !!pending}
+                />
+              </PromptInputFooter>
+            </PromptInputBody>
+          </PromptInput>
+          <p className="mt-2 text-center text-xs text-muted-foreground">
+            Enter to send · Shift+Enter for newline · Not for diagnosis
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function ChatMessageItem({ message }: { message: ChatMessage }) {
   const [copied, setCopied] = useState(false);
   const isUser = message.role === "user";
 
@@ -305,90 +219,112 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
-      // ignored — clipboard unavailable
+      // ignored
     }
   }
 
   return (
-    <Group
-      justify={isUser ? "flex-end" : "flex-start"}
-      align="flex-start"
-      gap="xs"
-      wrap="nowrap"
-    >
-      <Stack
-        gap={4}
-        style={{
-          maxWidth: "78%",
-          alignItems: isUser ? "flex-end" : "flex-start",
-        }}
-      >
-        <Box
-          style={{
-            background: isUser
-              ? "var(--phc-bubble-user)"
-              : "var(--phc-bubble-assistant)",
-            border: `1px solid ${isUser ? "transparent" : "var(--phc-border)"}`,
-            padding: "10px 14px",
-            color: "var(--phc-text-strong)",
-          }}
-        >
-          <Text
-            size="sm"
-            lh={1.65}
-            style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}
+    <Message from={message.role}>
+      <MessageContent>
+        {isUser ? (
+          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+        ) : (
+          <MessageResponse>{message.content}</MessageResponse>
+        )}
+      </MessageContent>
+      <MessageActions className="px-1 text-xs text-muted-foreground">
+        <span>{formatTime(message.createdAt)}</span>
+        {!isUser && (
+          <MessageAction
+            tooltip={copied ? "Copied" : "Copy"}
+            onClick={copy}
+            label="Copy message"
           >
-            {message.content}
-          </Text>
-        </Box>
-        <Group gap={6}>
-          <Text size="xs" c="var(--phc-text-muted)">
-            {formatTime(message.createdAt)}
-          </Text>
-          {!isUser && (
-            <Tooltip label={copied ? "Copied" : "Copy"}>
-              <ActionIcon
-                size="xs"
-                variant="subtle"
-                color="gray"
-                onClick={copy}
-                aria-label="Copy message"
-              >
-                {copied ? <Check size={12} /> : <Copy size={12} />}
-              </ActionIcon>
-            </Tooltip>
-          )}
-        </Group>
-      </Stack>
-    </Group>
+            {copied ? (
+              <Check className="size-3.5" />
+            ) : (
+              <Copy className="size-3.5" />
+            )}
+          </MessageAction>
+        )}
+      </MessageActions>
+    </Message>
   );
 }
 
-function ThinkingBubble() {
+function PendingBubble({ text }: { text: string }) {
   return (
-    <Group justify="flex-start" align="flex-start" gap="xs" wrap="nowrap">
-      <Stack
-        gap={4}
-        style={{ maxWidth: "78%", alignItems: "flex-start" }}
-      >
-        <Box
-          style={{
-            background: "var(--phc-bubble-assistant)",
-            border: "1px solid var(--phc-border)",
-            padding: "10px 14px",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          <Loader size="xs" color="teal" />
-          <Text size="sm" c="var(--phc-text-muted)">
-            Thinking…
-          </Text>
-        </Box>
-      </Stack>
-    </Group>
+    <>
+      <Message from="user">
+        <MessageContent>
+          <p className="whitespace-pre-wrap break-words">{text}</p>
+        </MessageContent>
+      </Message>
+      <Message from="assistant">
+        <MessageContent>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <span className="size-1.5 animate-pulse rounded-full bg-current [animation-delay:-0.3s]" />
+              <span className="size-1.5 animate-pulse rounded-full bg-current [animation-delay:-0.15s]" />
+              <span className="size-1.5 animate-pulse rounded-full bg-current" />
+            </span>
+            <span className="text-sm">Thinking…</span>
+          </div>
+        </MessageContent>
+      </Message>
+    </>
   );
+}
+
+function EmptyState({
+  workflow,
+  onPick,
+}: {
+  workflow: Workflow;
+  onPick: (text: string) => void;
+}) {
+  return (
+    <ConversationEmptyState
+      className="my-auto"
+      icon={
+        <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Sparkles className="size-6" />
+        </div>
+      }
+      title={workflow.label}
+      description={workflow.help}
+    >
+      <div className="flex size-full flex-col items-center justify-center gap-6 p-8 text-center">
+        <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Sparkles className="size-6" />
+        </div>
+        <div className="space-y-1.5">
+          <h2 className="text-base font-semibold text-foreground">
+            {workflow.label}
+          </h2>
+          <p className="max-w-md text-sm text-muted-foreground">
+            {workflow.help}
+          </p>
+        </div>
+        <Suggestions className="justify-center">
+          {workflow.questions.map((question) => (
+            <Suggestion
+              key={question}
+              suggestion={question}
+              onClick={onPick}
+            />
+          ))}
+        </Suggestions>
+      </div>
+    </ConversationEmptyState>
+  );
+}
+
+function cryptoId(): string {
+  if (typeof globalThis.crypto !== "undefined" && globalThis.crypto.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+  return Math.random().toString(36).slice(2);
 }
 
 function formatTime(timestamp: number): string {
