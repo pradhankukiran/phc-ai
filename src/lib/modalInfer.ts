@@ -6,7 +6,7 @@ export type PhcModel =
   | "google/derm-foundation"
   | "google/path-foundation";
 
-export type PhcTask = "chat" | "asr" | "image_embed" | "classify" | "similarity";
+export type PhcTask = "chat" | "asr" | "image_embed" | "classify";
 
 export type InferRequest = {
   model: PhcModel;
@@ -15,7 +15,7 @@ export type InferRequest = {
     prompt?: string | null;
     text?: string | null;
     messages?: Array<{
-      role: "user" | "assistant";
+      role: "system" | "user" | "assistant";
       content: string;
     }> | null;
     labels?: string[] | null;
@@ -52,6 +52,16 @@ export type InferResponse = {
   message?: string;
 };
 
+function isInferResponse(value: unknown): value is InferResponse {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.model === "string" &&
+    typeof candidate.task === "string" &&
+    (candidate.status === "ok" || candidate.status === "error")
+  );
+}
+
 export async function infer(request: InferRequest): Promise<InferResponse> {
   const endpoint = process.env.NEXT_PUBLIC_MODAL_INFER_URL;
 
@@ -65,23 +75,48 @@ export async function infer(request: InferRequest): Promise<InferResponse> {
     };
   }
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(request),
-  });
-
-  const payload = (await response.json()) as InferResponse;
-
-  if (!response.ok) {
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(request),
+    });
+  } catch (error) {
     return {
-      ...payload,
-      model: payload.model ?? request.model,
-      task: payload.task ?? request.task,
+      model: request.model,
+      task: request.task,
       status: "error",
+      code: "NETWORK_ERROR",
+      message: error instanceof Error ? error.message : "Network request failed.",
     };
+  }
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    return {
+      model: request.model,
+      task: request.task,
+      status: "error",
+      code: "BAD_RESPONSE",
+      message: `Server returned non-JSON (${response.status}).`,
+    };
+  }
+
+  if (!isInferResponse(payload)) {
+    return {
+      model: request.model,
+      task: request.task,
+      status: "error",
+      code: "BAD_RESPONSE",
+      message: `Unexpected response shape (${response.status}).`,
+    };
+  }
+
+  if (!response.ok && payload.status !== "error") {
+    return { ...payload, status: "error" };
   }
 
   return payload;

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { ColorSchemeScript, mantineHtmlProps } from "@mantine/core";
 import "@mantine/core/styles.css";
 import "./globals.css";
 import { Providers } from "./providers";
@@ -16,7 +17,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "PHC-AI",
-  description: "Personal Health Checkup AI portfolio prototype.",
+  description: "Personal Health Clinic AI portfolio prototype.",
 };
 
 export default function RootLayout({
@@ -27,8 +28,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      {...mantineHtmlProps}
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <ColorSchemeScript />
+      </head>
       <body className="flex min-h-full flex-col">
         <Providers>{children}</Providers>
       </body>

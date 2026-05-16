@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { PhcWorkspace } from "@/components/phc-workspace";
 import { getWorkflow, workflows } from "@/lib/workflows";
 
+export const dynamicParams = false;
+
 export function generateStaticParams() {
   return workflows.map((workflow) => ({ workflow: workflow.route }));
 }
