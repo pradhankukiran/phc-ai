@@ -15,9 +15,15 @@ ModelId = Literal[
 Task = Literal["chat", "asr", "image_embed", "classify", "similarity"]
 
 
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
 class InferInputs(BaseModel):
     prompt: str | None = None
     text: str | None = None
+    messages: list[ChatMessage] | None = None
     labels: list[str] | None = None
     image_base64: str | None = None
     audio_base64: str | None = None

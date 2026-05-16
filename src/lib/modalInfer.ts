@@ -14,6 +14,10 @@ export type InferRequest = {
   inputs: {
     prompt?: string | null;
     text?: string | null;
+    messages?: Array<{
+      role: "user" | "assistant";
+      content: string;
+    }> | null;
     labels?: string[] | null;
     image_base64?: string | null;
     audio_base64?: string | null;

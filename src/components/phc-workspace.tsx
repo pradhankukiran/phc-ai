@@ -40,6 +40,11 @@ type Inputs = {
   file: File | null;
 };
 
+type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export function PhcWorkspace({ activeRoute }: { activeRoute: WorkflowRoute }) {
   const workflow = useMemo(
     () => workflows.find((item) => item.route === activeRoute) ?? workflows[0],
@@ -53,11 +58,27 @@ export function PhcWorkspace({ activeRoute }: { activeRoute: WorkflowRoute }) {
   const [result, setResult] = useState<InferResponse | null>(null);
   const [status, setStatus] = useState<"idle" | "running">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
   async function runInference() {
     setStatus("running");
     setError(null);
-    setResult(null);
+    const isChat = workflow.route === "chat";
+    const nextMessages: ChatMessage[] = isChat
+      ? [
+          ...chatMessages,
+          {
+            role: "user",
+            content: inputs.prompt.trim(),
+          },
+        ]
+      : [];
+
+    if (isChat) {
+      setChatMessages(nextMessages);
+    } else {
+      setResult(null);
+    }
 
     try {
       const fileBase64 = inputs.file ? await fileToDataUrl(inputs.file) : null;
@@ -75,6 +96,7 @@ export function PhcWorkspace({ activeRoute }: { activeRoute: WorkflowRoute }) {
         inputs: {
           prompt: inputs.prompt,
           text: inputs.text,
+          messages: isChat ? nextMessages : undefined,
           labels,
           image_base64:
             workflow.accepts === "image" || workflow.accepts === "image-text"
@@ -93,6 +115,18 @@ export function PhcWorkspace({ activeRoute }: { activeRoute: WorkflowRoute }) {
 
       if (response.status === "error") {
         setError(response.message ?? response.code ?? "Inference failed.");
+        if (isChat) {
+          setChatMessages(chatMessages);
+        }
+      } else if (isChat && response.output?.text) {
+        setChatMessages([
+          ...nextMessages,
+          {
+            role: "assistant",
+            content: response.output.text,
+          },
+        ]);
+        setInputs((current) => ({ ...current, prompt: "" }));
       }
       setResult(response);
     } catch (err) {
@@ -104,7 +138,7 @@ export function PhcWorkspace({ activeRoute }: { activeRoute: WorkflowRoute }) {
 
   const canRun =
     workflow.accepts === "text"
-      ? Boolean(inputs.prompt.trim() || inputs.text.trim())
+      ? Boolean(inputs.prompt.trim())
       : Boolean(inputs.file);
 
   return (
@@ -198,7 +232,13 @@ export function PhcWorkspace({ activeRoute }: { activeRoute: WorkflowRoute }) {
             </Grid.Col>
 
             <Grid.Col span={{ base: 12, lg: 8 }}>
-              <OutputPanel error={error} result={result} status={status} workflow={workflow} />
+              <OutputPanel
+                chatMessages={chatMessages}
+                error={error}
+                result={result}
+                status={status}
+                workflow={workflow}
+              />
             </Grid.Col>
           </Grid>
         </Tabs>
@@ -223,6 +263,7 @@ function InputPanel({
   onRun: () => void;
 }) {
   const needsFile = workflow.accepts !== "text";
+  const isChat = workflow.route === "chat";
 
   return (
     <Card shadow="sm" withBorder>
@@ -241,7 +282,11 @@ function InputPanel({
 
         {(workflow.accepts === "text" || workflow.accepts === "image-text") && (
           <Textarea
-            label={workflow.route === "image-match" ? "Candidate labels" : "Question or instruction"}
+            label={
+              workflow.route === "image-match"
+                ? "Candidate labels"
+                : "Message"
+            }
             minRows={workflow.route === "image-match" ? 4 : 5}
             value={inputs.prompt}
             onChange={(event) =>
@@ -252,7 +297,7 @@ function InputPanel({
 
         {workflow.accepts === "text" && (
           <Textarea
-            label="Report or visit text"
+            label="Report or visit context"
             minRows={8}
             value={inputs.text}
             onChange={(event) =>
@@ -279,7 +324,7 @@ function InputPanel({
           disabled={!canRun}
           onClick={onRun}
         >
-          Analyze
+          {isChat ? "Send" : "Analyze"}
         </Button>
       </Stack>
     </Card>
@@ -287,11 +332,13 @@ function InputPanel({
 }
 
 function OutputPanel({
+  chatMessages,
   workflow,
   result,
   status,
   error,
 }: {
+  chatMessages: ChatMessage[];
   workflow: Workflow;
   result: InferResponse | null;
   status: "idle" | "running";
@@ -302,6 +349,7 @@ function OutputPanel({
     result?.output?.text ??
     result?.output?.transcript ??
     (result?.output?.embedding ? `Embedding preview: ${result.output.embedding.slice(0, 24).join(", ")}` : "");
+  const isChat = workflow.route === "chat";
 
   return (
     <Grid gap="md">
@@ -342,7 +390,33 @@ function OutputPanel({
               </Alert>
             )}
 
-            {!result && status === "idle" && !error && (
+            {isChat && chatMessages.length > 0 && (
+              <Stack gap="sm">
+                {chatMessages.map((message, index) => (
+                  <Paper
+                    key={`${message.role}-${index}`}
+                    p="md"
+                    bg={message.role === "user" ? "#eef8f6" : "#fbfefd"}
+                    withBorder
+                  >
+                    <Text size="xs" fw={700} c="teal.8" tt="uppercase">
+                      {message.role === "user" ? "You" : "PHC-AI"}
+                    </Text>
+                    <Text
+                      size="sm"
+                      lh={1.7}
+                      c="#31443f"
+                      mt={6}
+                      style={{ whiteSpace: "pre-wrap" }}
+                    >
+                      {message.content}
+                    </Text>
+                  </Paper>
+                ))}
+              </Stack>
+            )}
+
+            {!result && status === "idle" && !error && !isChat && (
               <Paper p="lg" bg="#f7fbfa" withBorder>
                 <Text c="dimmed">
                   Add required input, then analyze. Results will appear here.
@@ -350,7 +424,16 @@ function OutputPanel({
               </Paper>
             )}
 
-            {outputText && (
+            {isChat && chatMessages.length === 0 && status === "idle" && !error && (
+              <Paper p="lg" bg="#f7fbfa" withBorder>
+                <Text c="dimmed">
+                  Paste report context, ask your first question, then continue
+                  the conversation here.
+                </Text>
+              </Paper>
+            )}
+
+            {outputText && !isChat && (
               <Paper p="md" bg="#fbfefd" withBorder>
                 <Group align="flex-start" gap="sm">
                   <ThemeIcon color="teal" variant="light" size="sm">

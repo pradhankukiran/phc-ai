@@ -155,22 +155,7 @@ def run_medgemma(runtime: dict[str, Any], request: InferRequest) -> InferOutput:
 
     processor = runtime["processor"]
     model = runtime["model"]
-    content: list[dict[str, Any]] = []
-
-    if request.inputs.image_base64:
-        content.append({"type": "image", "image": decode_image(request.inputs.image_base64)})
-
-    prompt_parts = [
-        "Answer directly in patient-friendly language. Do not include hidden reasoning.",
-        request.inputs.prompt or "",
-        request.inputs.text or "",
-    ]
-    prompt = "\n\n".join(part for part in prompt_parts if part.strip())
-    if not prompt.strip():
-        prompt = "Explain the provided health document in plain language."
-    content.append({"type": "text", "text": prompt})
-
-    messages = [{"role": "user", "content": content}]
+    messages = build_medgemma_messages(request)
     inputs = processor.apply_chat_template(
         messages,
         add_generation_prompt=True,
@@ -195,6 +180,44 @@ def run_medgemma(runtime: dict[str, Any], request: InferRequest) -> InferOutput:
         skip_special_tokens=True,
     )
     return InferOutput(text=sanitize_medgemma_text(decoded))
+
+
+def build_medgemma_messages(request: InferRequest) -> list[dict[str, Any]]:
+    instruction = (
+        "Answer directly in patient-friendly language. Do not include hidden "
+        "reasoning. Do not diagnose or prescribe."
+    )
+    report_context = request.inputs.text or ""
+    image = decode_image(request.inputs.image_base64) if request.inputs.image_base64 else None
+
+    if request.inputs.messages:
+        transcript = "\n".join(
+            f"{message.role.title()}: {message.content}"
+            for message in request.inputs.messages
+        )
+        prompt_parts = [
+            instruction,
+            "Conversation so far:",
+            transcript,
+            "Answer the latest user message directly.",
+        ]
+        if report_context:
+            prompt_parts.append(f"Reference health document:\n{report_context}")
+        content = [{"type": "text", "text": "\n\n".join(prompt_parts)}]
+        if image:
+            content.insert(0, {"type": "image", "image": image})
+        return [{"role": "user", "content": content}]
+
+    prompt_parts = [
+        instruction,
+        request.inputs.prompt or "Explain the provided health document in plain language.",
+        report_context,
+    ]
+    prompt = "\n\n".join(part for part in prompt_parts if part.strip())
+    content = [{"type": "text", "text": prompt}]
+    if image:
+        content.insert(0, {"type": "image", "image": image})
+    return [{"role": "user", "content": content}]
 
 
 def run_medasr(runtime: dict[str, Any], request: InferRequest) -> InferOutput:
