@@ -289,9 +289,10 @@ function InputPanel({
             }
             minRows={workflow.route === "image-match" ? 4 : 5}
             value={inputs.prompt}
-            onChange={(event) =>
-              setInputs((current) => ({ ...current, prompt: event.currentTarget.value }))
-            }
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              setInputs((current) => ({ ...current, prompt: value }));
+            }}
           />
         )}
 
@@ -300,9 +301,10 @@ function InputPanel({
             label="Report or visit context"
             minRows={8}
             value={inputs.text}
-            onChange={(event) =>
-              setInputs((current) => ({ ...current, text: event.currentTarget.value }))
-            }
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              setInputs((current) => ({ ...current, text: value }));
+            }}
             placeholder="Paste discharge summary, labs, prescription note, or visit instructions..."
           />
         )}
