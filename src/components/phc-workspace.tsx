@@ -250,6 +250,9 @@ export function PhcWorkspace() {
             <Grid.Col span={{ base: 12, md: 7 }}>
               <Stack gap="md">
                 <Stack gap={6}>
+                  <Text size="sm" fw={700} c="teal.8" tt="uppercase">
+                    Personal Health Clinic
+                  </Text>
                   <Title order={1} size="h1" c="#10201c">
                     PHC-AI
                   </Title>
