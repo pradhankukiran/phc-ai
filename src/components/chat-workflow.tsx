@@ -16,7 +16,7 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { cn } from "@/lib/utils";
 import { Check, Copy, X } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Workflow } from "@/lib/workflows";
 import { infer } from "@/lib/modalInfer";
 
@@ -32,9 +32,14 @@ export function ChatWorkflow({ workflow }: { workflow: Workflow }) {
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const status = pending ? "submitted" : "ready";
   const hasHistory = messages.length > 0;
+
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, [workflow.route]);
 
   const submit = useCallback(
     async (text: string) => {
@@ -151,8 +156,16 @@ export function ChatWorkflow({ workflow }: { workflow: Workflow }) {
         {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
 
         <div className="mx-auto w-full max-w-3xl px-6 py-4 md:px-10">
+          <div className="mb-2 flex items-baseline justify-between gap-3">
+            <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-ink-soft">
+              Message · {workflow.order} / 06
+            </span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+              Type below
+            </span>
+          </div>
           <PromptInput
-            className="border-2 border-ink bg-paper"
+            className="border-2 border-ink bg-paper focus-within:border-accent transition-colors"
             onSubmit={(message) => {
               const text = message.text ?? "";
               setDraft("");
@@ -161,11 +174,12 @@ export function ChatWorkflow({ workflow }: { workflow: Workflow }) {
           >
             <PromptInputBody>
               <PromptInputTextarea
-                placeholder="ask about your visit notes, labs, or instructions…"
+                ref={textareaRef}
+                placeholder="Type your question about your visit, labs, or instructions…"
                 value={draft}
                 onChange={(e) => setDraft(e.currentTarget.value)}
                 disabled={!!pending}
-                className="min-h-20 max-h-56 border-0 bg-transparent px-4 py-3 font-sans text-base leading-relaxed text-ink placeholder:font-mono placeholder:text-[12px] placeholder:uppercase placeholder:tracking-[0.16em] placeholder:text-ink-faint focus-visible:ring-0"
+                className="min-h-24 max-h-56 border-0 bg-transparent px-4 py-3 font-sans text-base leading-relaxed text-ink placeholder:font-sans placeholder:text-base placeholder:normal-case placeholder:tracking-normal placeholder:text-ink-faint focus-visible:ring-0"
               />
               <PromptInputFooter className="border-t border-ink bg-paper-soft/40 px-3 py-2">
                 <PromptInputTools>
@@ -386,20 +400,20 @@ function EmptyState({
   const secondDigit = workflow.order.charAt(1);
 
   return (
-    <div className="flex min-h-full flex-col justify-between gap-12 py-12 md:py-16">
-      <div className="grid grid-cols-12 gap-x-6">
+    <div className="flex min-h-full flex-col justify-between gap-8 py-8 md:py-10">
+      <div className="grid grid-cols-12 gap-x-6 items-center">
         <div className="col-span-12 md:col-span-5">
           <div className="flex items-start leading-none font-display tracking-tight">
-            <span className="text-[10rem] md:text-[14rem] font-light text-ink">
+            <span className="text-[6rem] md:text-[9rem] font-light text-ink">
               {firstDigit}
             </span>
-            <span className="text-[10rem] md:text-[14rem] font-light text-accent">
+            <span className="text-[6rem] md:text-[9rem] font-light text-accent">
               {secondDigit}
             </span>
           </div>
         </div>
 
-        <div className="col-span-12 mt-4 flex flex-col gap-5 md:col-span-7 md:mt-12">
+        <div className="col-span-12 mt-2 flex flex-col gap-4 md:col-span-7 md:mt-0">
           <div className="border-t-2 border-ink pt-4">
             <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-ink-soft">
               Workflow · {workflow.order} / 06
