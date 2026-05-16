@@ -1,5 +1,5 @@
-import { PhcWorkspace } from "@/components/phc-workspace";
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return <PhcWorkspace />;
+  redirect("/chat");
 }

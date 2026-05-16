@@ -21,137 +21,18 @@ import {
   ThemeIcon,
   Title,
 } from "@mantine/core";
-import type { LucideIcon } from "lucide-react";
 import {
-  AudioLines,
-  Bone,
   Brain,
   ClipboardCheck,
-  ClipboardList,
-  FileImage,
   HeartPulse,
-  Microscope,
-  Search,
   Send,
   ShieldAlert,
   Stethoscope,
 } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
-import { infer, type InferResponse, type PhcModel, type PhcTask } from "@/lib/modalInfer";
-
-type Workflow = {
-  id: string;
-  label: string;
-  shortLabel: string;
-  model: PhcModel;
-  task: PhcTask;
-  icon: LucideIcon;
-  accepts: "text" | "audio" | "image" | "image-text";
-  prompt: string;
-  help: string;
-  questions: string[];
-};
-
-const workflows: Workflow[] = [
-  {
-    id: "visit",
-    label: "Visit Notes",
-    shortLabel: "Notes",
-    model: "google/medgemma-1.5-4b-it",
-    task: "chat",
-    icon: ClipboardList,
-    accepts: "text",
-    prompt:
-      "Explain this health report in plain language. List key findings, what I may have missed, and questions to ask my doctor.",
-    help: "Paste real or sample visit notes, lab comments, discharge instructions, or report text.",
-    questions: [
-      "What changed since my last visit?",
-      "Which follow-ups are time sensitive?",
-      "What should I confirm with my doctor?",
-    ],
-  },
-  {
-    id: "asr",
-    label: "Conversation",
-    shortLabel: "Audio",
-    model: "google/medasr",
-    task: "asr",
-    icon: AudioLines,
-    accepts: "audio",
-    prompt: "Upload visit audio for transcription.",
-    help: "Upload an audio file. Backend sends it to MedASR and returns transcript.",
-    questions: [
-      "Did I capture dosage timing correctly?",
-      "Which instructions are unclear?",
-      "What needs follow-up?",
-    ],
-  },
-  {
-    id: "siglip",
-    label: "Image Match",
-    shortLabel: "Images",
-    model: "google/medsiglip-448",
-    task: "classify",
-    icon: Search,
-    accepts: "image-text",
-    prompt:
-      "normal follow-up image\nneeds clinician review\nunclear image quality",
-    help: "Upload an image and provide candidate labels, one per line, for MedSigLIP scores.",
-    questions: [
-      "Does this image need formal review?",
-      "Should I track change over time?",
-      "Is image quality good enough?",
-    ],
-  },
-  {
-    id: "cxr",
-    label: "Chest X-ray",
-    shortLabel: "CXR",
-    model: "google/cxr-foundation",
-    task: "image_embed",
-    icon: Bone,
-    accepts: "image",
-    prompt: "Upload a chest X-ray image for CXR Foundation embedding.",
-    help: "Returns CXR embedding vector preview. Use for search/similarity, not diagnosis.",
-    questions: [
-      "Was anything new compared with prior scan?",
-      "Do symptoms match imaging findings?",
-      "Is repeat imaging needed?",
-    ],
-  },
-  {
-    id: "derm",
-    label: "Skin",
-    shortLabel: "Skin",
-    model: "google/derm-foundation",
-    task: "image_embed",
-    icon: FileImage,
-    accepts: "image",
-    prompt: "Upload a dermatology image for Derm Foundation embedding.",
-    help: "Returns Derm Foundation embedding preview. Use for retrieval or organization.",
-    questions: [
-      "Which changes matter most?",
-      "How often should I photograph it?",
-      "When should I book review?",
-    ],
-  },
-  {
-    id: "path",
-    label: "Pathology",
-    shortLabel: "Path",
-    model: "google/path-foundation",
-    task: "image_embed",
-    icon: Microscope,
-    accepts: "image",
-    prompt: "Upload a 224x224 pathology patch or image crop for Path Foundation embedding.",
-    help: "Returns Path Foundation embedding preview. Whole-slide tiling is not implemented.",
-    questions: [
-      "What result changes my treatment plan?",
-      "Were margins clear?",
-      "Do I need specialist review?",
-    ],
-  },
-];
+import { infer, type InferResponse } from "@/lib/modalInfer";
+import { workflows, type Workflow, type WorkflowRoute } from "@/lib/workflows";
 
 type Inputs = {
   prompt: string;
@@ -159,32 +40,19 @@ type Inputs = {
   file: File | null;
 };
 
-const defaultInputs: Inputs = {
-  prompt: workflows[0].prompt,
-  text: "",
-  file: null,
-};
-
-export function PhcWorkspace() {
-  const [active, setActive] = useState(workflows[0].id);
-  const [inputs, setInputs] = useState<Inputs>(defaultInputs);
+export function PhcWorkspace({ activeRoute }: { activeRoute: WorkflowRoute }) {
+  const workflow = useMemo(
+    () => workflows.find((item) => item.route === activeRoute) ?? workflows[0],
+    [activeRoute],
+  );
+  const [inputs, setInputs] = useState<Inputs>({
+    prompt: workflow.prompt,
+    text: "",
+    file: null,
+  });
   const [result, setResult] = useState<InferResponse | null>(null);
   const [status, setStatus] = useState<"idle" | "running">("idle");
   const [error, setError] = useState<string | null>(null);
-
-  const workflow = useMemo(
-    () => workflows.find((item) => item.id === active) ?? workflows[0],
-    [active],
-  );
-
-  function switchTab(value: string | null) {
-    if (!value) return;
-    const next = workflows.find((item) => item.id === value) ?? workflows[0];
-    setActive(next.id);
-    setInputs({ prompt: next.prompt, text: "", file: null });
-    setResult(null);
-    setError(null);
-  }
 
   async function runInference() {
     setStatus("running");
@@ -194,7 +62,7 @@ export function PhcWorkspace() {
     try {
       const fileBase64 = inputs.file ? await fileToDataUrl(inputs.file) : null;
       const labels =
-        workflow.id === "siglip"
+        workflow.route === "image-match"
           ? inputs.prompt
               .split("\n")
               .map((label) => label.trim())
@@ -300,12 +168,17 @@ export function PhcWorkspace() {
       </Box>
 
       <Container size="xl" py="lg">
-        <Tabs value={active} onChange={switchTab} variant="pills" color="teal">
+        <Tabs value={activeRoute} variant="pills" color="teal">
           <Tabs.List grow>
             {workflows.map((item) => {
               const Icon = item.icon;
               return (
-                <Tabs.Tab key={item.id} value={item.id} leftSection={<Icon size={16} />}>
+                <Tabs.Tab
+                  key={item.route}
+                  value={item.route}
+                  leftSection={<Icon size={16} />}
+                  renderRoot={(props) => <Link {...props} href={`/${item.route}`} />}
+                >
                   {item.shortLabel}
                 </Tabs.Tab>
               );
@@ -368,8 +241,8 @@ function InputPanel({
 
         {(workflow.accepts === "text" || workflow.accepts === "image-text") && (
           <Textarea
-            label={workflow.id === "siglip" ? "Candidate labels" : "Question or instruction"}
-            minRows={workflow.id === "siglip" ? 4 : 5}
+            label={workflow.route === "image-match" ? "Candidate labels" : "Question or instruction"}
+            minRows={workflow.route === "image-match" ? 4 : 5}
             value={inputs.prompt}
             onChange={(event) =>
               setInputs((current) => ({ ...current, prompt: event.currentTarget.value }))

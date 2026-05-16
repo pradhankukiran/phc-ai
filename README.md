@@ -37,6 +37,15 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+Routes:
+
+- `/chat`
+- `/conversation`
+- `/image-match`
+- `/chest-xray`
+- `/skin`
+- `/pathology`
+
 ## Modal Backend
 
 ```bash
