@@ -6,6 +6,11 @@ const theme = createTheme({
   primaryColor: "teal",
   defaultRadius: 0,
   fontFamily: "var(--font-geist-sans), Arial, sans-serif",
+  headings: {
+    fontFamily: "var(--font-geist-sans), Arial, sans-serif",
+    fontWeight: "700",
+  },
+  respectReducedMotion: true,
 });
 
 export function Providers({ children }: { children: React.ReactNode }) {

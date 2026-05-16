@@ -1,500 +1,116 @@
 "use client";
 
-import {
-  Alert,
-  Badge,
-  Box,
-  Button,
-  Card,
-  Container,
-  Divider,
-  FileInput,
-  Grid,
-  Group,
-  JsonInput,
-  List,
-  Paper,
-  Stack,
-  Tabs,
-  Text,
-  Textarea,
-  ThemeIcon,
-  Title,
-} from "@mantine/core";
-import {
-  Brain,
-  ClipboardCheck,
-  HeartPulse,
-  Send,
-  ShieldAlert,
-  Stethoscope,
-} from "lucide-react";
+import { Box, Container, Group, Text } from "@mantine/core";
+import type { Route } from "next";
+import { HeartPulse, ShieldAlert } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { infer, type InferResponse } from "@/lib/modalInfer";
-import { workflows, type Workflow, type WorkflowRoute } from "@/lib/workflows";
-
-type Inputs = {
-  prompt: string;
-  text: string;
-  file: File | null;
-};
-
-type ChatMessage = {
-  role: "user" | "assistant";
-  content: string;
-};
+import { useMemo } from "react";
+import { ChatWorkflow } from "./chat-workflow";
+import { MediaWorkflow } from "./media-workflow";
+import {
+  getWorkflow,
+  workflows,
+  type WorkflowRoute,
+} from "@/lib/workflows";
 
 export function PhcWorkspace({ activeRoute }: { activeRoute: WorkflowRoute }) {
-  const workflow = useMemo(
-    () => workflows.find((item) => item.route === activeRoute) ?? workflows[0],
-    [activeRoute],
-  );
-  const [inputs, setInputs] = useState<Inputs>({
-    prompt: workflow.prompt,
-    text: "",
-    file: null,
-  });
-  const [result, setResult] = useState<InferResponse | null>(null);
-  const [status, setStatus] = useState<"idle" | "running">("idle");
-  const [error, setError] = useState<string | null>(null);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-
-  async function runInference() {
-    setStatus("running");
-    setError(null);
-    const isChat = workflow.route === "chat";
-    const nextMessages: ChatMessage[] = isChat
-      ? [
-          ...chatMessages,
-          {
-            role: "user",
-            content: inputs.prompt.trim(),
-          },
-        ]
-      : [];
-
-    if (isChat) {
-      setChatMessages(nextMessages);
-    } else {
-      setResult(null);
-    }
-
-    try {
-      const fileBase64 = inputs.file ? await fileToDataUrl(inputs.file) : null;
-      const labels =
-        workflow.route === "image-match"
-          ? inputs.prompt
-              .split("\n")
-              .map((label) => label.trim())
-              .filter(Boolean)
-          : undefined;
-
-      const response = await infer({
-        model: workflow.model,
-        task: workflow.task,
-        inputs: {
-          prompt: inputs.prompt,
-          text: inputs.text,
-          messages: isChat ? nextMessages : undefined,
-          labels,
-          image_base64:
-            workflow.accepts === "image" || workflow.accepts === "image-text"
-              ? fileBase64
-              : null,
-          audio_base64: workflow.accepts === "audio" ? fileBase64 : null,
-        },
-        options: {
-          max_new_tokens: 768,
-          temperature: 0.2,
-          top_p: 0.9,
-          embedding_limit: 256,
-          return_embeddings: true,
-        },
-      });
-
-      if (response.status === "error") {
-        setError(response.message ?? response.code ?? "Inference failed.");
-        if (isChat) {
-          setChatMessages(chatMessages);
-        }
-      } else if (isChat && response.output?.text) {
-        setChatMessages([
-          ...nextMessages,
-          {
-            role: "assistant",
-            content: response.output.text,
-          },
-        ]);
-        setInputs((current) => ({ ...current, prompt: "" }));
-      }
-      setResult(response);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Inference failed.");
-    } finally {
-      setStatus("idle");
-    }
-  }
-
-  const canRun =
-    workflow.accepts === "text"
-      ? Boolean(inputs.prompt.trim())
-      : Boolean(inputs.file);
+  const workflow = useMemo(() => {
+    const found = getWorkflow(activeRoute);
+    if (!found) throw new Error(`Unknown workflow route: ${activeRoute}`);
+    return found;
+  }, [activeRoute]);
 
   return (
-    <Box bg="#f6faf9" mih="100vh">
-      <Box
-        bg="linear-gradient(135deg, #e7f6f2 0%, #f7fbff 52%, #fff8ec 100%)"
-        style={{ borderBottom: "1px solid #dbe7e4" }}
-      >
-        <Container size="xl" py={{ base: 28, md: 42 }}>
-          <Grid align="center" gap="xl">
-            <Grid.Col span={{ base: 12, md: 7 }}>
-              <Stack gap="md">
-                <Stack gap={6}>
-                  <Text size="sm" fw={700} c="teal.8" tt="uppercase">
-                    Personal Health Clinic
-                  </Text>
-                  <Title order={1} size="h1" c="#10201c">
-                    PHC-AI
-                  </Title>
-                  <Text size="xl" fw={600} c="#1d3a35">
-                    Understand your checkup after the visit.
-                  </Text>
-                  <Text size="md" maw={680} c="dimmed" lh={1.7}>
-                    Ask questions about your visit notes, reports, images, and
-                    recorded instructions in one place.
-                  </Text>
-                </Stack>
-
-                <Alert color="yellow" icon={<ShieldAlert size={18} />}>
-                  PHC-AI helps explain care documents. It does not diagnose,
-                  prescribe, or replace your clinician.
-                </Alert>
-              </Stack>
-            </Grid.Col>
-
-            <Grid.Col span={{ base: 12, md: 5 }}>
-              <Paper p="lg" shadow="sm" withBorder bg="white">
-                <Stack gap="md">
-                  <Group justify="space-between" align="flex-start">
-                    <div>
-                      <Text fw={700}>Your health packet</Text>
-                      <Text size="sm" c="dimmed">
-                        Notes, reports, images, and instructions
-                      </Text>
-                    </div>
-                    <ThemeIcon color="teal" variant="light" size="lg">
-                      <HeartPulse size={22} />
-                    </ThemeIcon>
-                  </Group>
-                  <List size="sm" spacing="xs" c="dimmed">
-                    <List.Item>Summarize doctor notes in plain language</List.Item>
-                    <List.Item>Transcribe visit recordings</List.Item>
-                    <List.Item>Review images and reports</List.Item>
-                    <List.Item>Prepare questions for follow-up</List.Item>
-                  </List>
-                </Stack>
-              </Paper>
-            </Grid.Col>
-          </Grid>
-        </Container>
-      </Box>
-
-      <Container size="xl" py="lg">
-        <Tabs value={activeRoute} variant="pills" color="teal">
-          <Tabs.List grow>
-            {workflows.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Tabs.Tab
-                  key={item.route}
-                  value={item.route}
-                  leftSection={<Icon size={16} />}
-                  renderRoot={(props) => <Link {...props} href={`/${item.route}`} />}
-                >
-                  {item.shortLabel}
-                </Tabs.Tab>
-              );
-            })}
-          </Tabs.List>
-
-          <Grid gap="lg" mt="md">
-            <Grid.Col span={{ base: 12, lg: 4 }}>
-              <InputPanel
-                canRun={canRun}
-                inputs={inputs}
-                setInputs={setInputs}
-                status={status}
-                workflow={workflow}
-                onRun={runInference}
-              />
-            </Grid.Col>
-
-            <Grid.Col span={{ base: 12, lg: 8 }}>
-              <OutputPanel
-                chatMessages={chatMessages}
-                error={error}
-                result={result}
-                status={status}
-                workflow={workflow}
-              />
-            </Grid.Col>
-          </Grid>
-        </Tabs>
-      </Container>
+    <Box style={{ minHeight: "100vh", background: "var(--phc-bg)" }}>
+      <Header activeRoute={activeRoute} />
+      {workflow.task === "chat" ? (
+        <ChatWorkflow workflow={workflow} />
+      ) : (
+        <MediaWorkflow workflow={workflow} />
+      )}
     </Box>
   );
 }
 
-function InputPanel({
-  workflow,
-  inputs,
-  setInputs,
-  status,
-  canRun,
-  onRun,
-}: {
-  workflow: Workflow;
-  inputs: Inputs;
-  setInputs: React.Dispatch<React.SetStateAction<Inputs>>;
-  status: "idle" | "running";
-  canRun: boolean;
-  onRun: () => void;
-}) {
-  const needsFile = workflow.accepts !== "text";
-  const isChat = workflow.route === "chat";
-
+function Header({ activeRoute }: { activeRoute: WorkflowRoute }) {
   return (
-    <Card shadow="sm" withBorder>
-      <Stack gap="md">
-        <Group>
-          <ThemeIcon color="teal" variant="light" size="lg">
-            <Brain size={22} />
-          </ThemeIcon>
-          <div>
-            <Text fw={700}>{workflow.label}</Text>
-            <Text size="sm" c="dimmed">
-              {workflow.help}
-            </Text>
-          </div>
-        </Group>
-
-        {(workflow.accepts === "text" || workflow.accepts === "image-text") && (
-          <Textarea
-            label={
-              workflow.route === "image-match"
-                ? "Candidate labels"
-                : "Message"
-            }
-            minRows={workflow.route === "image-match" ? 4 : 5}
-            value={inputs.prompt}
-            onChange={(event) => {
-              const value = event.currentTarget.value;
-              setInputs((current) => ({ ...current, prompt: value }));
-            }}
-          />
-        )}
-
-        {workflow.accepts === "text" && (
-          <Textarea
-            label="Report or visit context"
-            minRows={8}
-            value={inputs.text}
-            onChange={(event) => {
-              const value = event.currentTarget.value;
-              setInputs((current) => ({ ...current, text: value }));
-            }}
-            placeholder="Paste discharge summary, labs, prescription note, or visit instructions..."
-          />
-        )}
-
-        {needsFile && (
-          <FileInput
-            accept={workflow.accepts === "audio" ? "audio/*" : "image/*"}
-            label={workflow.accepts === "audio" ? "Audio file" : "Image file"}
-            placeholder="Choose file"
-            value={inputs.file}
-            onChange={(file) => setInputs((current) => ({ ...current, file }))}
-          />
-        )}
-
-        <Button
-          color="teal"
-          leftSection={<Send size={16} />}
-          loading={status === "running"}
-          disabled={!canRun}
-          onClick={onRun}
+    <header
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 50,
+        height: "var(--phc-header-height)",
+        background: "var(--phc-surface)",
+        borderBottom: "1px solid var(--phc-border)",
+      }}
+    >
+      <Container
+        size="xl"
+        h="100%"
+        style={{ display: "flex", alignItems: "center", gap: 24 }}
+      >
+        <Link
+          href={"/chat" as Route}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            textDecoration: "none",
+            color: "var(--phc-text-strong)",
+          }}
         >
-          {isChat ? "Send" : "Analyze"}
-        </Button>
-      </Stack>
-    </Card>
+          <HeartPulse size={20} color="var(--phc-accent)" />
+          <Text fw={800} size="md" c="var(--phc-text-strong)">
+            PHC-AI
+          </Text>
+        </Link>
+        <nav
+          aria-label="Workflows"
+          style={{
+            display: "flex",
+            gap: 2,
+            flex: 1,
+            overflowX: "auto",
+          }}
+        >
+          {workflows.map((w) => {
+            const Icon = w.icon;
+            const active = w.route === activeRoute;
+            return (
+              <Link
+                key={w.route}
+                href={`/${w.route}` as Route}
+                prefetch
+                aria-current={active ? "page" : undefined}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "10px 14px",
+                  textDecoration: "none",
+                  fontSize: 14,
+                  fontWeight: active ? 700 : 500,
+                  color: active ? "var(--phc-accent)" : "var(--phc-text-muted)",
+                  borderBottom: active
+                    ? "2px solid var(--phc-accent)"
+                    : "2px solid transparent",
+                  whiteSpace: "nowrap",
+                  transition: "color 120ms ease, border-color 120ms ease",
+                }}
+              >
+                <Icon size={14} />
+                {w.shortLabel}
+              </Link>
+            );
+          })}
+        </nav>
+        <Group gap={6} visibleFrom="md">
+          <ShieldAlert size={14} color="var(--phc-text-muted)" />
+          <Text size="xs" c="var(--phc-text-muted)">
+            Not for diagnosis
+          </Text>
+        </Group>
+      </Container>
+    </header>
   );
-}
-
-function OutputPanel({
-  chatMessages,
-  workflow,
-  result,
-  status,
-  error,
-}: {
-  chatMessages: ChatMessage[];
-  workflow: Workflow;
-  result: InferResponse | null;
-  status: "idle" | "running";
-  error: string | null;
-}) {
-  const Icon = workflow.icon;
-  const outputText =
-    result?.output?.text ??
-    result?.output?.transcript ??
-    (result?.output?.embedding ? `Embedding preview: ${result.output.embedding.slice(0, 24).join(", ")}` : "");
-  const isChat = workflow.route === "chat";
-
-  return (
-    <Grid gap="md">
-      <Grid.Col span={{ base: 12, xl: 8 }}>
-        <Card shadow="sm" withBorder>
-          <Stack gap="md">
-            <Group justify="space-between" align="flex-start">
-              <Group align="flex-start">
-                <ThemeIcon color="teal" variant="light" size="xl">
-                  <Icon size={24} />
-                </ThemeIcon>
-                <div>
-                  <Title order={2} size="h3">
-                    {workflow.label}
-                  </Title>
-                  <Text size="sm" c="dimmed">
-                    {workflow.model}
-                  </Text>
-                </div>
-              </Group>
-              <Badge color="gray" variant="light">
-                {workflow.task}
-              </Badge>
-            </Group>
-
-            <Divider />
-
-            {status === "running" && (
-              <Alert color="teal" icon={<Stethoscope size={18} />}>
-                Analyzing your information. First analysis for a section can take
-                a few minutes.
-              </Alert>
-            )}
-
-            {error && (
-              <Alert color="red" icon={<ShieldAlert size={18} />}>
-                {error}
-              </Alert>
-            )}
-
-            {isChat && chatMessages.length > 0 && (
-              <Stack gap="sm">
-                {chatMessages.map((message, index) => (
-                  <Paper
-                    key={`${message.role}-${index}`}
-                    p="md"
-                    bg={message.role === "user" ? "#eef8f6" : "#fbfefd"}
-                    withBorder
-                  >
-                    <Text size="xs" fw={700} c="teal.8" tt="uppercase">
-                      {message.role === "user" ? "You" : "PHC-AI"}
-                    </Text>
-                    <Text
-                      size="sm"
-                      lh={1.7}
-                      c="#31443f"
-                      mt={6}
-                      style={{ whiteSpace: "pre-wrap" }}
-                    >
-                      {message.content}
-                    </Text>
-                  </Paper>
-                ))}
-              </Stack>
-            )}
-
-            {!result && status === "idle" && !error && !isChat && (
-              <Paper p="lg" bg="#f7fbfa" withBorder>
-                <Text c="dimmed">
-                  Add required input, then analyze. Results will appear here.
-                </Text>
-              </Paper>
-            )}
-
-            {isChat && chatMessages.length === 0 && status === "idle" && !error && (
-              <Paper p="lg" bg="#f7fbfa" withBorder>
-                <Text c="dimmed">
-                  Paste report context, ask your first question, then continue
-                  the conversation here.
-                </Text>
-              </Paper>
-            )}
-
-            {outputText && !isChat && (
-              <Paper p="md" bg="#fbfefd" withBorder>
-                <Group align="flex-start" gap="sm">
-                  <ThemeIcon color="teal" variant="light" size="sm">
-                    <ClipboardCheck size={14} />
-                  </ThemeIcon>
-                  <Text size="sm" lh={1.7} c="#31443f" style={{ whiteSpace: "pre-wrap" }}>
-                    {outputText}
-                  </Text>
-                </Group>
-              </Paper>
-            )}
-
-            {result?.output?.scores && (
-              <JsonInput
-                label="Scores"
-                value={JSON.stringify(result.output.scores, null, 2)}
-                readOnly
-                autosize
-              />
-            )}
-          </Stack>
-        </Card>
-      </Grid.Col>
-
-      <Grid.Col span={{ base: 12, xl: 4 }}>
-        <Stack gap="md">
-          <Card shadow="sm" withBorder>
-            <Stack gap="sm">
-              <Group>
-                <ThemeIcon color="yellow" variant="light">
-                  <Stethoscope size={18} />
-                </ThemeIcon>
-                <Text fw={700}>Ask your clinician</Text>
-              </Group>
-              <List size="sm" spacing="sm" c="#31443f">
-                {workflow.questions.map((question) => (
-                  <List.Item key={question}>{question}</List.Item>
-                ))}
-              </List>
-            </Stack>
-          </Card>
-
-          <Alert color="gray" icon={<ShieldAlert size={18} />}>
-            <Text size="sm">
-              Outputs explain or embed provided material. They are not diagnosis,
-              prescriptions, or emergency guidance.
-            </Text>
-          </Alert>
-        </Stack>
-      </Grid.Col>
-    </Grid>
-  );
-}
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error("File read failed."));
-    reader.readAsDataURL(file);
-  });
 }
