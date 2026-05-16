@@ -16,7 +16,15 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { cn } from "@/lib/utils";
 import { Check, Copy, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  forwardRef,
+  memo,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import type { Workflow } from "@/lib/workflows";
 import { infer } from "@/lib/modalInfer";
 
@@ -27,24 +35,24 @@ type ChatMessage = {
   createdAt: number;
 };
 
+type ChatInputBarHandle = {
+  fill: (text: string) => void;
+  clear: () => void;
+  focus: () => void;
+};
+
 export function ChatWorkflow({ workflow }: { workflow: Workflow }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const inputBarRef = useRef<ChatInputBarHandle>(null);
 
-  const status = pending ? "submitted" : "ready";
   const hasHistory = messages.length > 0;
-
-  useEffect(() => {
-    textareaRef.current?.focus();
-  }, [workflow.route]);
 
   const submit = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
-      if (!trimmed || pending) return;
+      if (!trimmed) return;
 
       const userMessage: ChatMessage = {
         id: cryptoId(),
@@ -54,9 +62,13 @@ export function ChatWorkflow({ workflow }: { workflow: Workflow }) {
       };
       setError(null);
       setPending(trimmed);
-      setMessages((prev) => [...prev, userMessage]);
+      let appendedMessages: ChatMessage[] = [];
+      setMessages((prev) => {
+        appendedMessages = [...prev, userMessage];
+        return appendedMessages;
+      });
 
-      const requestMessages = [...messages, userMessage].map((m) => ({
+      const requestMessages = appendedMessages.map((m) => ({
         role: m.role,
         content: m.content,
       }));
@@ -83,7 +95,7 @@ export function ChatWorkflow({ workflow }: { workflow: Workflow }) {
               ? prev.slice(0, -1)
               : prev,
           );
-          setDraft(trimmed);
+          inputBarRef.current?.fill(trimmed);
         } else if (response.output?.text) {
           const assistantText = response.output.text;
           setMessages((prev) => [
@@ -103,18 +115,25 @@ export function ChatWorkflow({ workflow }: { workflow: Workflow }) {
             ? prev.slice(0, -1)
             : prev,
         );
-        setDraft(trimmed);
+        inputBarRef.current?.fill(trimmed);
       } finally {
         setPending(null);
       }
     },
-    [messages, pending, workflow.model, workflow.task],
+    [workflow.model, workflow.task],
   );
 
-  const clear = useCallback(() => {
+  const clearConversation = useCallback(() => {
     setMessages([]);
     setError(null);
-    setDraft("");
+    inputBarRef.current?.clear();
+    inputBarRef.current?.focus();
+  }, []);
+
+  const dismissError = useCallback(() => setError(null), []);
+
+  const handlePick = useCallback((text: string) => {
+    inputBarRef.current?.fill(text);
   }, []);
 
   return (
@@ -129,12 +148,7 @@ export function ChatWorkflow({ workflow }: { workflow: Workflow }) {
         >
           <ConversationContent className="mx-auto w-full max-w-3xl px-6 py-0 gap-0 md:px-10">
             {!hasHistory && !pending ? (
-              <EmptyState
-                workflow={workflow}
-                onPick={(text) => {
-                  setDraft(text);
-                }}
-              />
+              <EmptyState workflow={workflow} onPick={handlePick} />
             ) : (
               <ol className="flex flex-col">
                 {messages.map((m, index) => (
@@ -152,24 +166,91 @@ export function ChatWorkflow({ workflow }: { workflow: Workflow }) {
         </Conversation>
       </div>
 
+      <ChatInputBar
+        ref={inputBarRef}
+        workflowOrder={workflow.order}
+        pending={!!pending}
+        error={error}
+        hasHistory={hasHistory}
+        onSubmit={submit}
+        onDismissError={dismissError}
+        onClear={clearConversation}
+      />
+    </div>
+  );
+}
+
+/* ---------- Input bar (owns its own draft state to isolate re-renders) ---------- */
+
+type ChatInputBarProps = {
+  workflowOrder: string;
+  pending: boolean;
+  error: string | null;
+  hasHistory: boolean;
+  onSubmit: (text: string) => void | Promise<void>;
+  onDismissError: () => void;
+  onClear: () => void;
+};
+
+const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(
+  function ChatInputBar(
+    {
+      workflowOrder,
+      pending,
+      error,
+      hasHistory,
+      onSubmit,
+      onDismissError,
+      onClear,
+    },
+    ref,
+  ) {
+    const [draft, setDraft] = useState("");
+    const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        fill: (text: string) => {
+          setDraft(text);
+          requestAnimationFrame(() => textareaRef.current?.focus());
+        },
+        clear: () => setDraft(""),
+        focus: () => textareaRef.current?.focus(),
+      }),
+      [],
+    );
+
+    useEffect(() => {
+      textareaRef.current?.focus();
+    }, []);
+
+    const trimmed = draft.trim();
+    const status = pending ? "submitted" : "ready";
+    const canSend = trimmed.length > 0 && !pending;
+    const clearDisabled = !hasHistory && !error && draft.length === 0 && !pending;
+
+    return (
       <div className="flex-shrink-0 border-t-2 border-ink bg-paper">
-        {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
+        {error && <ErrorBanner message={error} onDismiss={onDismissError} />}
 
         <div className="mx-auto w-full max-w-3xl px-6 py-4 md:px-10">
           <div className="mb-2 flex items-baseline justify-between gap-3">
             <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-ink-soft">
-              Message · {workflow.order} / 06
+              Message · {workflowOrder} / 06
             </span>
             <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
               Type below
             </span>
           </div>
+
           <PromptInput
-            className="border-2 border-ink bg-paper focus-within:border-accent transition-colors"
+            className="border-2 border-ink bg-paper transition-colors focus-within:border-accent"
             onSubmit={(message) => {
-              const text = message.text ?? "";
+              const text = (message.text ?? "").trim();
+              if (!text) return;
               setDraft("");
-              return submit(text);
+              return onSubmit(text);
             }}
           >
             <PromptInputBody>
@@ -178,15 +259,15 @@ export function ChatWorkflow({ workflow }: { workflow: Workflow }) {
                 placeholder="Type your question about your visit, labs, or instructions…"
                 value={draft}
                 onChange={(e) => setDraft(e.currentTarget.value)}
-                disabled={!!pending}
+                disabled={pending}
                 className="min-h-24 max-h-56 border-0 bg-transparent px-4 py-3 font-sans text-base leading-relaxed text-ink placeholder:font-sans placeholder:text-base placeholder:normal-case placeholder:tracking-normal placeholder:text-ink-faint focus-visible:ring-0"
               />
               <PromptInputFooter className="border-t border-ink bg-paper-soft/40 px-3 py-2">
                 <PromptInputTools>
                   <button
                     type="button"
-                    onClick={clear}
-                    disabled={!hasHistory && !error && draft.length === 0 && !pending}
+                    onClick={onClear}
+                    disabled={clearDisabled}
                     aria-label="Clear conversation"
                     className={cn(
                       "inline-flex items-center gap-1.5 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors",
@@ -200,7 +281,7 @@ export function ChatWorkflow({ workflow }: { workflow: Workflow }) {
                 </PromptInputTools>
                 <PromptInputSubmit
                   status={status}
-                  disabled={!draft.trim() || !!pending}
+                  disabled={!canSend}
                   className={cn(
                     "h-8 w-auto px-3 font-mono text-[11px] uppercase tracking-[0.2em] shadow-none",
                     "bg-ink text-paper hover:bg-accent hover:text-paper",
@@ -225,13 +306,13 @@ export function ChatWorkflow({ workflow }: { workflow: Workflow }) {
           </p>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  },
+);
 
 /* ---------- Title rail ---------- */
 
-function TitleRail({
+const TitleRail = memo(function TitleRail({
   workflow,
   running,
 }: {
@@ -266,11 +347,11 @@ function TitleRail({
       </div>
     </div>
   );
-}
+});
 
 /* ---------- Message row ---------- */
 
-function ChatMessageItem({
+const ChatMessageItem = memo(function ChatMessageItem({
   message,
   isFirst,
 }: {
@@ -348,11 +429,11 @@ function ChatMessageItem({
       </div>
     </li>
   );
-}
+});
 
 /* ---------- Pending assistant placeholder ---------- */
 
-function PendingAssistant() {
+const PendingAssistant = memo(function PendingAssistant() {
   return (
     <li className="border-b border-ink/15 py-6" aria-live="polite">
       <div className="flex items-baseline justify-between gap-4">
@@ -373,7 +454,7 @@ function PendingAssistant() {
       </div>
     </li>
   );
-}
+});
 
 /* ---------- Sending dots (inline, on submit button) ---------- */
 
@@ -389,7 +470,7 @@ function SendingDots() {
 
 /* ---------- Empty state — Swiss poster ---------- */
 
-function EmptyState({
+const EmptyState = memo(function EmptyState({
   workflow,
   onPick,
 }: {
@@ -471,7 +552,7 @@ function EmptyState({
       </div>
     </div>
   );
-}
+});
 
 /* ---------- Error banner ---------- */
 
@@ -483,10 +564,7 @@ function ErrorBanner({
   onDismiss: () => void;
 }) {
   return (
-    <div
-      role="alert"
-      className="border-b border-ink bg-paper"
-    >
+    <div role="alert" className="border-b border-ink bg-paper">
       <div className="mx-auto flex w-full max-w-3xl items-center gap-4 px-6 py-2.5 md:px-10">
         <span
           aria-hidden
