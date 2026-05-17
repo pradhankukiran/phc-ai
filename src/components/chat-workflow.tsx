@@ -205,30 +205,40 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(
     },
     ref,
   ) {
-    const [draft, setDraft] = useState("");
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+    const [isEmpty, setIsEmpty] = useState(true);
+
+    const writeValue = useCallback((text: string) => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      ta.value = text;
+      setIsEmpty(text.length === 0);
+    }, []);
 
     useImperativeHandle(
       ref,
       () => ({
         fill: (text: string) => {
-          setDraft(text);
-          requestAnimationFrame(() => textareaRef.current?.focus());
+          writeValue(text);
+          const ta = textareaRef.current;
+          if (ta) {
+            ta.focus();
+            ta.setSelectionRange(text.length, text.length);
+          }
         },
-        clear: () => setDraft(""),
+        clear: () => writeValue(""),
         focus: () => textareaRef.current?.focus(),
       }),
-      [],
+      [writeValue],
     );
 
     useEffect(() => {
       textareaRef.current?.focus();
     }, []);
 
-    const trimmed = draft.trim();
     const status = pending ? "submitted" : "ready";
-    const canSend = trimmed.length > 0 && !pending;
-    const clearDisabled = !hasHistory && !error && draft.length === 0 && !pending;
+    const canSend = !isEmpty && !pending;
+    const clearDisabled = !hasHistory && !error && isEmpty && !pending;
 
     return (
       <div className="flex-shrink-0 border-t-2 border-ink bg-paper">
@@ -249,7 +259,7 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(
             onSubmit={(message) => {
               const text = (message.text ?? "").trim();
               if (!text) return;
-              setDraft("");
+              writeValue("");
               return onSubmit(text);
             }}
           >
@@ -257,10 +267,13 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(
               <PromptInputTextarea
                 ref={textareaRef}
                 placeholder="Type your question about your visit, labs, or instructions…"
-                value={draft}
-                onChange={(e) => setDraft(e.currentTarget.value)}
+                defaultValue=""
+                onInput={(e) => {
+                  const empty = e.currentTarget.value.length === 0;
+                  setIsEmpty((prev) => (prev === empty ? prev : empty));
+                }}
                 disabled={pending}
-                className="min-h-24 max-h-56 border-0 bg-transparent px-4 py-3 font-sans text-base leading-relaxed text-ink placeholder:font-sans placeholder:text-base placeholder:normal-case placeholder:tracking-normal placeholder:text-ink-faint focus-visible:ring-0"
+                className="min-h-24 max-h-56 border-0 bg-transparent px-4 py-3 font-sans text-base leading-relaxed text-ink placeholder:font-sans placeholder:text-base placeholder:normal-case placeholder:tracking-normal placeholder:text-ink-faint focus-visible:ring-0 [field-sizing:fixed]"
               />
               <PromptInputFooter className="border-t border-ink bg-paper-soft/40 px-3 py-2">
                 <PromptInputTools>
