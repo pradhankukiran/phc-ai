@@ -38,13 +38,10 @@ function Header({ activeRoute }: { activeRoute: WorkflowRoute }) {
     <header className="sticky top-0 z-40 flex h-[var(--header-height)] flex-shrink-0 items-stretch border-b border-ink bg-paper">
       <Link
         href={"/" as Route}
-        className="flex items-center gap-3 border-r border-ink px-5 hover:bg-ink hover:text-paper transition-colors"
+        className="flex items-center border-r border-ink px-5 hover:bg-ink hover:text-paper transition-colors"
       >
-        <span className="font-sans text-base font-bold tracking-tight">
-          PHC<span className="text-accent">—</span>AI
-        </span>
-        <span className="hidden font-mono text-[10px] uppercase tracking-[0.18em] opacity-60 md:inline">
-          v0.1
+        <span className="font-display text-2xl italic font-medium leading-none tracking-tight">
+          Phc<span className="text-accent">—</span>Ai
         </span>
       </Link>
 

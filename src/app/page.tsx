@@ -6,29 +6,15 @@ import { workflows } from "@/lib/workflows";
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col bg-paper text-ink">
-      {/* Top edge — thick rule with mono micro-label */}
+      {/* Top edge — thick rule with serif wordmark */}
       <div className="border-b-2 border-ink">
-        <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between px-6 py-3 md:px-10">
-          <div className="flex items-center gap-3">
-            <span
-              aria-hidden
-              className="block size-1.5 bg-accent"
-            />
-            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink">
-              Personal Health Clinic
-              <span className="mx-2 text-ink-faint">/</span>
-              AI Assistant
-              <span className="mx-2 text-ink-faint">/</span>
-              <span className="text-ink-soft">v0.1</span>
-            </span>
-          </div>
-          <div className="hidden font-mono text-[10px] uppercase tracking-[0.22em] text-ink-soft md:block">
-            Portfolio Prototype
-            <span className="mx-2 text-ink-faint">·</span>
-            Stockholm
-            <span className="mx-2 text-ink-faint">·</span>
-            <span className="tabular-nums">MMXXVI</span>
-          </div>
+        <div className="mx-auto flex w-full max-w-[1600px] items-center gap-3 px-6 py-3 md:px-10">
+          <span aria-hidden className="block size-1.5 bg-accent" />
+          <span className="font-display text-lg italic font-medium leading-none tracking-tight text-ink md:text-xl">
+            Personal Health Clinic
+            <span className="mx-2 not-italic text-ink-faint">·</span>
+            <span className="text-ink-soft">AI Assistant</span>
+          </span>
         </div>
       </div>
 
