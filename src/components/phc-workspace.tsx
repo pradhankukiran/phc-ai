@@ -41,7 +41,7 @@ function Header({ activeRoute }: { activeRoute: WorkflowRoute }) {
         className="flex items-center border-r border-ink px-5 hover:bg-ink hover:text-paper transition-colors"
       >
         <span className="font-display text-2xl italic font-medium leading-none tracking-tight">
-          Phc<span className="text-accent">—</span>Ai
+          PHC<span className="text-accent">—</span>AI
         </span>
       </Link>
 

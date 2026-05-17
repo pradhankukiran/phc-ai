@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" preserveAspectRatio="xMidYMid meet">
+  <rect width="1200" height="360" fill="#FAF6EE"/>
+
+  <rect x="0" y="0" width="1200" height="4" fill="#1A1612"/>
+
+  <g font-family="'SF Mono', Menlo, 'Courier New', monospace" font-size="11" fill="#1A1612" letter-spacing="2">
+    <rect x="30" y="22" width="6" height="6" fill="#C2410C"/>
+    <text x="48" y="32">PERSONAL HEALTH CLINIC &#183; AI ASSISTANT</text>
+    <text x="1170" y="32" text-anchor="end" fill="#5C5048">SHEET 00 / 01 &#183; ISSUE 2026</text>
+  </g>
+
+  <rect x="0" y="56" width="1200" height="1" fill="#1A1612"/>
+
+  <text x="30" y="260" font-family="Georgia, 'Times New Roman', serif" font-size="220" font-style="italic" font-weight="500" fill="#1A1612" letter-spacing="-10">PHC<tspan fill="#C2410C">&#8212;</tspan>AI</text>
+
+  <text x="1170" y="260" font-family="Georgia, 'Times New Roman', serif" font-size="220" font-style="italic" font-weight="300" fill="#1A1612" text-anchor="end" letter-spacing="-14">0<tspan fill="#C2410C">0</tspan></text>
+
+  <rect x="30" y="290" width="1140" height="1" fill="#1A1612"/>
+
+  <g font-family="'SF Mono', Menlo, 'Courier New', monospace" font-size="13" letter-spacing="2">
+    <text x="30" y="322" fill="#5C5048">A PATIENT-FACING READING ROOM FOR MEDICAL TEXT, AUDIO, AND IMAGES.</text>
+    <text x="1170" y="322" text-anchor="end" fill="#1A1612">SIX MODULES &#183; 01 &#8212; 06</text>
+  </g>
+
+  <rect x="0" y="356" width="1200" height="4" fill="#1A1612"/>
+</svg>
