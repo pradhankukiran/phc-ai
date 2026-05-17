@@ -6,14 +6,6 @@ import {
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
 import { MessageResponse } from "@/components/ai-elements/message";
-import {
-  PromptInput,
-  PromptInputBody,
-  PromptInputFooter,
-  PromptInputSubmit,
-  PromptInputTextarea,
-  PromptInputTools,
-} from "@/components/ai-elements/prompt-input";
 import { cn } from "@/lib/utils";
 import { Check, Copy, X } from "lucide-react";
 import {
@@ -24,6 +16,8 @@ import {
   useImperativeHandle,
   useRef,
   useState,
+  type FormEvent,
+  type KeyboardEvent,
 } from "react";
 import type { Workflow } from "@/lib/workflows";
 import { infer } from "@/lib/modalInfer";
@@ -208,35 +202,63 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const [isEmpty, setIsEmpty] = useState(true);
 
-    const writeValue = useCallback((text: string) => {
-      const ta = textareaRef.current;
-      if (!ta) return;
-      ta.value = text;
-      setIsEmpty(text.length === 0);
-    }, []);
-
     useImperativeHandle(
       ref,
       () => ({
         fill: (text: string) => {
-          writeValue(text);
           const ta = textareaRef.current;
-          if (ta) {
-            ta.focus();
-            ta.setSelectionRange(text.length, text.length);
-          }
+          if (!ta) return;
+          ta.value = text;
+          setIsEmpty(text.length === 0);
+          ta.focus();
+          ta.setSelectionRange(text.length, text.length);
         },
-        clear: () => writeValue(""),
+        clear: () => {
+          const ta = textareaRef.current;
+          if (!ta) return;
+          ta.value = "";
+          setIsEmpty(true);
+        },
         focus: () => textareaRef.current?.focus(),
       }),
-      [writeValue],
+      [],
     );
 
     useEffect(() => {
       textareaRef.current?.focus();
     }, []);
 
-    const status = pending ? "submitted" : "ready";
+    function submit() {
+      const ta = textareaRef.current;
+      if (!ta || pending) return;
+      const text = ta.value.trim();
+      if (!text) return;
+      ta.value = "";
+      setIsEmpty(true);
+      onSubmit(text);
+    }
+
+    function handleSubmit(e: FormEvent<HTMLFormElement>) {
+      e.preventDefault();
+      submit();
+    }
+
+    function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+      if (
+        e.key === "Enter" &&
+        !e.shiftKey &&
+        !e.nativeEvent.isComposing
+      ) {
+        e.preventDefault();
+        submit();
+      }
+    }
+
+    function handleInput(e: FormEvent<HTMLTextAreaElement>) {
+      const empty = e.currentTarget.value.length === 0;
+      setIsEmpty((prev) => (prev === empty ? prev : empty));
+    }
+
     const canSend = !isEmpty && !pending;
     const clearDisabled = !hasHistory && !error && isEmpty && !pending;
 
@@ -254,65 +276,56 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(
             </span>
           </div>
 
-          <PromptInput
+          <form
+            onSubmit={handleSubmit}
             className="border-2 border-ink bg-paper transition-colors focus-within:border-accent"
-            onSubmit={(message) => {
-              const text = (message.text ?? "").trim();
-              if (!text) return;
-              writeValue("");
-              return onSubmit(text);
-            }}
           >
-            <PromptInputBody>
-              <PromptInputTextarea
-                ref={textareaRef}
-                placeholder="Type your question about your visit, labs, or instructions…"
-                defaultValue=""
-                onInput={(e) => {
-                  const empty = e.currentTarget.value.length === 0;
-                  setIsEmpty((prev) => (prev === empty ? prev : empty));
-                }}
-                disabled={pending}
-                className="min-h-24 max-h-56 border-0 bg-transparent px-4 py-3 font-sans text-base leading-relaxed text-ink placeholder:font-sans placeholder:text-base placeholder:normal-case placeholder:tracking-normal placeholder:text-ink-faint focus-visible:ring-0 [field-sizing:fixed]"
-              />
-              <PromptInputFooter className="border-t border-ink bg-paper-soft/40 px-3 py-2">
-                <PromptInputTools>
-                  <button
-                    type="button"
-                    onClick={onClear}
-                    disabled={clearDisabled}
-                    aria-label="Clear conversation"
-                    className={cn(
-                      "inline-flex items-center gap-1.5 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors",
-                      "text-ink-soft hover:bg-ink hover:text-paper",
-                      "disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink-soft",
-                    )}
-                  >
-                    <X className="size-3" aria-hidden />
-                    <span>Clear</span>
-                  </button>
-                </PromptInputTools>
-                <PromptInputSubmit
-                  status={status}
-                  disabled={!canSend}
-                  className={cn(
-                    "h-8 w-auto px-3 font-mono text-[11px] uppercase tracking-[0.2em] shadow-none",
-                    "bg-ink text-paper hover:bg-accent hover:text-paper",
-                    "disabled:cursor-not-allowed disabled:bg-ink/20 disabled:text-ink-faint",
-                  )}
-                >
-                  {pending ? (
-                    <span className="inline-flex items-center gap-2">
-                      <SendingDots />
-                      <span>Sending</span>
-                    </span>
-                  ) : (
-                    <span>[ Send ]</span>
-                  )}
-                </PromptInputSubmit>
-              </PromptInputFooter>
-            </PromptInputBody>
-          </PromptInput>
+            <textarea
+              ref={textareaRef}
+              name="message"
+              placeholder="Type your question about your visit, labs, or instructions…"
+              defaultValue=""
+              onInput={handleInput}
+              onKeyDown={handleKeyDown}
+              disabled={pending}
+              rows={3}
+              className="block w-full resize-none bg-transparent px-4 py-3 font-sans text-base leading-relaxed text-ink outline-none placeholder:text-ink-faint disabled:cursor-not-allowed disabled:opacity-60"
+            />
+            <div className="flex items-center justify-between gap-3 border-t border-ink bg-paper-soft/40 px-3 py-2">
+              <button
+                type="button"
+                onClick={onClear}
+                disabled={clearDisabled}
+                aria-label="Clear conversation"
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors",
+                  "text-ink-soft hover:bg-ink hover:text-paper",
+                  "disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink-soft",
+                )}
+              >
+                <X className="size-3" aria-hidden />
+                <span>Clear</span>
+              </button>
+              <button
+                type="submit"
+                disabled={!canSend}
+                className={cn(
+                  "inline-flex h-8 items-center gap-2 px-3 font-mono text-[11px] uppercase tracking-[0.2em] transition-colors",
+                  "bg-ink text-paper hover:bg-accent",
+                  "disabled:cursor-not-allowed disabled:bg-ink/20 disabled:text-ink-faint",
+                )}
+              >
+                {pending ? (
+                  <>
+                    <SendingDots />
+                    <span>Sending</span>
+                  </>
+                ) : (
+                  <span>[ Send ]</span>
+                )}
+              </button>
+            </div>
+          </form>
 
           <p className="mt-3 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
             Enter to send · Shift+Enter for newline · Not for diagnosis
